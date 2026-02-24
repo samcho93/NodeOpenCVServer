@@ -62,6 +62,39 @@
 
     const NODE_WIDTH = 170;
     const PORT_RADIUS = 7;
+
+    // ===== Kernel/Matrix Helpers =====
+    const KERNEL_PRESETS = {
+        identity:    (n) => { const k = new Array(n*n).fill(0); k[Math.floor(n*n/2)] = 1; return k; },
+        sharpen:     () => [0,-1,0,-1,5,-1,0,-1,0],
+        edge_detect: () => [-1,-1,-1,-1,8,-1,-1,-1,-1],
+        emboss:      () => [-2,-1,0,-1,1,1,0,1,2],
+        ridge:       () => [-1,-1,-1,-1,4,-1,-1,-1,-1],
+        blur:        (n) => new Array(n*n).fill(+(1/(n*n)).toFixed(4)),
+    };
+    function _getKernelValues(preset, ksize, kernelDataStr) {
+        if (preset === 'custom') {
+            try { return kernelDataStr.split(',').map(v => parseFloat(v.trim()) || 0); }
+            catch { return new Array(ksize * ksize).fill(0); }
+        }
+        const fn = KERNEL_PRESETS[preset];
+        return fn ? fn(ksize) : KERNEL_PRESETS.sharpen();
+    }
+
+    const AFFINE_PRESETS = {
+        custom:          null, // keep current
+        identity:        [1,0,0, 0,1,0],
+        translate_50_30: [1,0,50, 0,1,30],
+        rotate_30:       [0.866,-0.5,0, 0.5,0.866,0],
+        rotate_45:       [0.707,-0.707,0, 0.707,0.707,0],
+        rotate_90:       [0,-1,0, 1,0,0],
+        scale_half:      [0.5,0,0, 0,0.5,0],
+        scale_double:    [2,0,0, 0,2,0],
+        flip_h:          [-1,0,0, 0,1,0],
+        flip_v:          [1,0,0, 0,-1,0],
+        shear_x:         [1,0.3,0, 0,1,0],
+        shear_y:         [1,0,0, 0.3,1,0],
+    };
     const GRID_SIZE = 20;
 
     const canvas = document.getElementById('node-canvas');
@@ -1297,7 +1330,104 @@
         let html = `<div class="prop-row"><label>Type</label><input type="text" value="${def.label}" disabled></div>`;
         html += `<div class="prop-row"><label>Label</label><input type="text" value="${escapeAttr(node.label || '')}" data-prop="__label" placeholder="Optional label"></div>`;
 
+        // ===== Special node-type renderings =====
+        const _skipProps = new Set();
+
+        // --- Warp Affine: 2x3 matrix grid with presets ---
+        if (node.type === 'warp_affine') {
+            _skipProps.add('m00'); _skipProps.add('m01'); _skipProps.add('m02');
+            _skipProps.add('m10'); _skipProps.add('m11'); _skipProps.add('m12');
+            const m = [
+                node.properties.m00 ?? 1, node.properties.m01 ?? 0, node.properties.m02 ?? 0,
+                node.properties.m10 ?? 0, node.properties.m11 ?? 1, node.properties.m12 ?? 0
+            ];
+            html += `<div class="prop-row"><label>Transform Matrix (2x3)</label>
+                <table class="matrix-grid"><tbody>
+                <tr><td><input type="number" step="0.1" value="${m[0]}" data-prop="m00" data-matrix="0"></td>
+                    <td><input type="number" step="0.1" value="${m[1]}" data-prop="m01" data-matrix="1"></td>
+                    <td><input type="number" step="1"   value="${m[2]}" data-prop="m02" data-matrix="2"></td></tr>
+                <tr><td><input type="number" step="0.1" value="${m[3]}" data-prop="m10" data-matrix="3"></td>
+                    <td><input type="number" step="0.1" value="${m[4]}" data-prop="m11" data-matrix="4"></td>
+                    <td><input type="number" step="1"   value="${m[5]}" data-prop="m12" data-matrix="5"></td></tr>
+                </tbody></table>
+                <div class="matrix-labels"><span>scale/rot</span><span>scale/rot</span><span>translate</span></div>
+            </div>`;
+        }
+
+        // --- Warp Perspective: point tables with picker ---
+        if (node.type === 'warp_perspective') {
+            _skipProps.add('srcPoints'); _skipProps.add('dstPoints');
+            const srcStr = node.properties.srcPoints || '0,0;300,0;300,300;0,300';
+            const dstStr = node.properties.dstPoints || '0,0;300,0;300,300;0,300';
+            const srcPts = srcStr.split(';').map(p => p.split(',').map(Number));
+            const dstPts = dstStr.split(';').map(p => p.split(',').map(Number));
+            const labels = ['TL', 'TR', 'BR', 'BL'];
+
+            html += `<div class="prop-row"><label>Source Points
+                <button class="prop-btn pick-btn" data-pick-role="src" style="float:right;padding:1px 8px;font-size:10px;background:#89b4fa;color:#1e1e2e">Pick on Image</button></label>
+                <table class="points-table"><thead><tr><th></th><th>X</th><th>Y</th></tr></thead><tbody>`;
+            for (let i = 0; i < 4; i++) {
+                html += `<tr><td><span class="point-badge point-src">${labels[i]}</span></td>
+                    <td><input type="number" value="${srcPts[i]?.[0] ?? 0}" data-perspect="srcX${i}" step="1"></td>
+                    <td><input type="number" value="${srcPts[i]?.[1] ?? 0}" data-perspect="srcY${i}" step="1"></td></tr>`;
+            }
+            html += `</tbody></table></div>`;
+
+            html += `<div class="prop-row"><label>Dest Points
+                <button class="prop-btn pick-btn" data-pick-role="dst" style="float:right;padding:1px 8px;font-size:10px;background:#f38ba8;color:#1e1e2e">Pick on Image</button></label>
+                <table class="points-table"><thead><tr><th></th><th>X</th><th>Y</th></tr></thead><tbody>`;
+            for (let i = 0; i < 4; i++) {
+                html += `<tr><td><span class="point-badge point-dst">${labels[i]}</span></td>
+                    <td><input type="number" value="${dstPts[i]?.[0] ?? 0}" data-perspect="dstX${i}" step="1"></td>
+                    <td><input type="number" value="${dstPts[i]?.[1] ?? 0}" data-perspect="dstY${i}" step="1"></td></tr>`;
+            }
+            html += `</tbody></table></div>`;
+        }
+
         for (const prop of def.properties) {
+            if (_skipProps.has(prop.key)) continue;
+
+            // --- Kernel grid (Filter2D, Morphology, Dilate, Erode, Structuring Element) ---
+            if (prop.type === 'kernel') {
+                // Determine grid dimensions based on node type
+                let kRows, kCols;
+                if (node.type === 'structuring_element') {
+                    kCols = parseInt(node.properties.width) || 5;
+                    kRows = parseInt(node.properties.height) || 5;
+                } else {
+                    const ks = parseInt(node.properties.kernelSize || node.properties.ksize) || 3;
+                    kRows = ks;
+                    kCols = ks;
+                }
+                // Custom mode: check both preset (filter2d) and shape (morph nodes)
+                const isCustom = (node.properties.preset === 'custom') || (node.properties.shape === 'custom');
+                // Get kernel values
+                let kernelValues;
+                if (node.properties.preset && node.properties.preset !== 'custom') {
+                    // filter2d with a named preset — compute from KERNEL_PRESETS
+                    kernelValues = _getKernelValues(node.properties.preset, kCols, node.properties.kernelData || prop.default);
+                } else {
+                    // morph nodes or custom mode — parse kernelData directly
+                    try {
+                        kernelValues = (node.properties.kernelData || prop.default || '').split(',').map(v => parseFloat(v.trim()) || 0);
+                    } catch(e) { kernelValues = new Array(kRows * kCols).fill(0); }
+                }
+                const totalCells = kRows * kCols;
+                html += `<div class="prop-row"><label>${prop.label} (${kCols}×${kRows})</label>
+                    <table class="matrix-grid kernel-grid" data-kernel-key="${prop.key}" data-k-rows="${kRows}" data-k-cols="${kCols}"><tbody>`;
+                for (let r = 0; r < kRows; r++) {
+                    html += '<tr>';
+                    for (let c = 0; c < kCols; c++) {
+                        const idx = r * kCols + c;
+                        const val = kernelValues[idx] ?? 0;
+                        html += `<td><input type="number" step="0.1" value="${val}" data-kernel-idx="${idx}" ${isCustom ? '' : 'disabled'}></td>`;
+                    }
+                    html += '</tr>';
+                }
+                html += `</tbody></table></div>`;
+                continue;
+            }
+
             if (prop.type === 'file') {
                 const acceptAttr = prop.accept || 'image/*';
                 html += `<div class="prop-row"><label>${prop.label}</label>
@@ -1372,6 +1502,87 @@
             });
         });
 
+        // --- Warp Affine preset handler ---
+        if (node.type === 'warp_affine') {
+            const presetSelect = el.querySelector('[data-prop="affinePreset"]');
+            if (presetSelect) {
+                const origHandler = presetSelect._handler;
+                presetSelect.addEventListener('change', () => {
+                    const preset = presetSelect.value;
+                    const vals = AFFINE_PRESETS[preset];
+                    if (vals) {
+                        pushUndo();
+                        const keys = ['m00','m01','m02','m10','m11','m12'];
+                        keys.forEach((k, i) => {
+                            node.properties[k] = vals[i];
+                            const inp = el.querySelector(`[data-prop="${k}"]`);
+                            if (inp) inp.value = vals[i];
+                        });
+                        node.properties.affinePreset = preset;
+                        scheduleAutoPreview(node);
+                    }
+                });
+            }
+        }
+
+        // --- Kernel grid handler (Filter2D, Morphology, Dilate, Erode, Structuring Element) ---
+        if (el.querySelector('.kernel-grid')) {
+            el.querySelectorAll('[data-kernel-idx]').forEach(input => {
+                input.addEventListener('input', () => {
+                    const allInputs = el.querySelectorAll('[data-kernel-idx]');
+                    const vals = [];
+                    allInputs.forEach(inp => vals.push(parseFloat(inp.value) || 0));
+                    pushUndo();
+                    node.properties.kernelData = vals.join(',');
+                    scheduleAutoPreview(node);
+                });
+            });
+            // Re-render kernel grid when relevant properties change
+            const reRenderKernel = () => {
+                // Auto-resize kernelData when switching to custom or changing size
+                let totalCells;
+                if (node.type === 'structuring_element') {
+                    totalCells = (parseInt(node.properties.width) || 5) * (parseInt(node.properties.height) || 5);
+                } else {
+                    const ks = parseInt(node.properties.kernelSize || node.properties.ksize) || 3;
+                    totalCells = ks * ks;
+                }
+                const curVals = (node.properties.kernelData || '').split(',').filter(v => v.trim());
+                if (curVals.length !== totalCells) {
+                    // Resize: fill with 1 for morph nodes, 0 for filter2d
+                    const fillVal = node.properties.shape !== undefined ? 1 : 0;
+                    node.properties.kernelData = new Array(totalCells).fill(fillVal).join(',');
+                }
+                setTimeout(() => renderProperties(node), 10);
+            };
+            ['preset', 'kernelSize', 'shape', 'ksize', 'width', 'height'].forEach(key => {
+                const ctrl = el.querySelector(`[data-prop="${key}"]`);
+                if (ctrl) ctrl.addEventListener('change', reRenderKernel);
+            });
+        }
+
+        // --- Warp Perspective points handler ---
+        if (node.type === 'warp_perspective') {
+            // Bind numeric inputs for points
+            el.querySelectorAll('[data-perspect]').forEach(input => {
+                input.addEventListener('input', () => {
+                    _syncPerspectivePoints(el, node);
+                    scheduleAutoPreview(node);
+                });
+                input.addEventListener('change', () => {
+                    _syncPerspectivePoints(el, node);
+                    scheduleAutoPreview(node);
+                });
+            });
+            // Pick buttons
+            el.querySelectorAll('.pick-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const role = btn.dataset.pickRole; // 'src' or 'dst'
+                    _startPointPicker(node, role);
+                });
+            });
+        }
+
         // Bind events
         el.querySelectorAll('[data-prop]').forEach(input => {
             const propKey = input.dataset.prop;
@@ -1402,6 +1613,12 @@
                     node.properties[propKey] = parseFloat(input.value);
                 } else {
                     node.properties[propKey] = input.value;
+                }
+                // For warp_affine matrix inputs, also set preset to 'custom'
+                if (node.type === 'warp_affine' && input.dataset.matrix !== undefined) {
+                    node.properties.affinePreset = 'custom';
+                    const ps = el.querySelector('[data-prop="affinePreset"]');
+                    if (ps) ps.value = 'custom';
                 }
                 scheduleAutoPreview(node);
             };
@@ -1517,6 +1734,182 @@
         modal.querySelector('.code-editor-overlay').onclick = closeCodeEditor;
     };
 
+    // ===== Perspective Point Helpers =====
+
+    function _syncPerspectivePoints(el, node) {
+        // Rebuild srcPoints/dstPoints strings from grid inputs
+        for (const role of ['src', 'dst']) {
+            const pts = [];
+            for (let i = 0; i < 4; i++) {
+                const xInput = el.querySelector(`[data-perspect="${role}X${i}"]`);
+                const yInput = el.querySelector(`[data-perspect="${role}Y${i}"]`);
+                const x = xInput ? parseFloat(xInput.value) || 0 : 0;
+                const y = yInput ? parseFloat(yInput.value) || 0 : 0;
+                pts.push(`${x},${y}`);
+            }
+            node.properties[role + 'Points'] = pts.join(';');
+        }
+    }
+
+    // Interactive point picker on preview image
+    let _pointPickerState = null;
+
+    function _startPointPicker(node, role) {
+        // Find the preview image in the preview panel
+        const previewEl = document.getElementById('preview-content');
+        const previewImg = previewEl ? previewEl.querySelector('img') : null;
+        if (!previewImg || !previewImg.src) {
+            setStatus('Run Preview first to pick points on the image', 'error');
+            return;
+        }
+
+        // Get actual image dimensions from node result
+        const result = state.nodeResults[node.id];
+        // Look for upstream image_read node result for real dimensions
+        let imgW = 300, imgH = 300;
+        if (result && result.shape) {
+            imgW = result.shape[1]; imgH = result.shape[0];
+        } else {
+            // Try to find dimensions from an upstream node
+            for (const conn of state.connections) {
+                if (conn.targetNode === node.id) {
+                    const srcResult = state.nodeResults[conn.sourceNode];
+                    if (srcResult && srcResult.shape) {
+                        imgW = srcResult.shape[1]; imgH = srcResult.shape[0];
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Create overlay canvas on top of preview image
+        const wrap = document.createElement('div');
+        wrap.className = 'preview-canvas-wrap';
+        wrap.style.position = 'relative';
+        wrap.style.display = 'inline-block';
+
+        const cvs = document.createElement('canvas');
+        cvs.className = 'preview-point-canvas picking';
+        cvs.width = previewImg.clientWidth;
+        cvs.height = previewImg.clientHeight;
+        cvs.style.position = 'absolute';
+        cvs.style.top = '0';
+        cvs.style.left = '0';
+        cvs.style.cursor = 'crosshair';
+        cvs.style.zIndex = '10';
+
+        // Wrap the image
+        previewImg.parentNode.insertBefore(wrap, previewImg);
+        wrap.appendChild(previewImg);
+        wrap.appendChild(cvs);
+
+        const pickerCtx = cvs.getContext('2d');
+        const points = [];
+        const color = role === 'src' ? '#89b4fa' : '#f38ba8';
+        const labels = ['TL', 'TR', 'BR', 'BL'];
+
+        _pointPickerState = { node, role, cvs, wrap, points, imgW, imgH };
+
+        setStatus(`Click 4 points on the image (${role === 'src' ? 'Source' : 'Dest'}: ${labels.join(' → ')})`, '');
+
+        // Draw existing points and guide
+        function drawPoints() {
+            pickerCtx.clearRect(0, 0, cvs.width, cvs.height);
+            // Draw lines between placed points
+            if (points.length > 1) {
+                pickerCtx.strokeStyle = color;
+                pickerCtx.lineWidth = 2;
+                pickerCtx.setLineDash([4, 4]);
+                pickerCtx.beginPath();
+                pickerCtx.moveTo(points[0].px, points[0].py);
+                for (let i = 1; i < points.length; i++) {
+                    pickerCtx.lineTo(points[i].px, points[i].py);
+                }
+                if (points.length === 4) pickerCtx.lineTo(points[0].px, points[0].py);
+                pickerCtx.stroke();
+                pickerCtx.setLineDash([]);
+            }
+            // Draw point circles
+            for (let i = 0; i < points.length; i++) {
+                pickerCtx.fillStyle = color;
+                pickerCtx.beginPath();
+                pickerCtx.arc(points[i].px, points[i].py, 6, 0, Math.PI * 2);
+                pickerCtx.fill();
+                pickerCtx.fillStyle = '#fff';
+                pickerCtx.font = 'bold 9px sans-serif';
+                pickerCtx.textAlign = 'center';
+                pickerCtx.textBaseline = 'middle';
+                pickerCtx.fillText(labels[i], points[i].px, points[i].py);
+            }
+            // Show remaining count
+            if (points.length < 4) {
+                pickerCtx.fillStyle = 'rgba(0,0,0,0.6)';
+                pickerCtx.fillRect(0, cvs.height - 20, cvs.width, 20);
+                pickerCtx.fillStyle = '#fff';
+                pickerCtx.font = '11px sans-serif';
+                pickerCtx.textAlign = 'center';
+                pickerCtx.fillText(`Click ${labels[points.length]} (${4 - points.length} remaining)`, cvs.width / 2, cvs.height - 7);
+            }
+        }
+
+        drawPoints();
+
+        cvs.addEventListener('click', function onPickClick(e) {
+            const rect = cvs.getBoundingClientRect();
+            const px = e.clientX - rect.left;
+            const py = e.clientY - rect.top;
+            // Convert preview coords to actual image coords
+            const scaleX = imgW / cvs.width;
+            const scaleY = imgH / cvs.height;
+            const realX = Math.round(px * scaleX);
+            const realY = Math.round(py * scaleY);
+            points.push({ px, py, x: realX, y: realY });
+            drawPoints();
+
+            if (points.length === 4) {
+                // Done picking — update node properties
+                cvs.removeEventListener('click', onPickClick);
+                pushUndo();
+                const ptsStr = points.map(p => `${p.x},${p.y}`).join(';');
+                node.properties[role + 'Points'] = ptsStr;
+                // Update the property panel inputs
+                const propEl = document.getElementById('prop-content');
+                for (let i = 0; i < 4; i++) {
+                    const xInp = propEl.querySelector(`[data-perspect="${role}X${i}"]`);
+                    const yInp = propEl.querySelector(`[data-perspect="${role}Y${i}"]`);
+                    if (xInp) xInp.value = points[i].x;
+                    if (yInp) yInp.value = points[i].y;
+                }
+                setStatus(`${role === 'src' ? 'Source' : 'Dest'} points set: ${ptsStr}`, 'success');
+                // Clean up overlay after a short delay
+                setTimeout(() => {
+                    if (wrap.parentNode) {
+                        wrap.parentNode.insertBefore(previewImg, wrap);
+                        wrap.remove();
+                    }
+                    _pointPickerState = null;
+                    scheduleAutoPreview(node);
+                }, 500);
+            } else {
+                setStatus(`Point ${points.length}/4 set (${labels[points.length - 1]}: ${realX},${realY}). Click ${labels[points.length]} next.`, '');
+            }
+        });
+
+        // ESC to cancel
+        function onEsc(e) {
+            if (e.key === 'Escape') {
+                document.removeEventListener('keydown', onEsc);
+                if (wrap.parentNode) {
+                    wrap.parentNode.insertBefore(previewImg, wrap);
+                    wrap.remove();
+                }
+                _pointPickerState = null;
+                setStatus('Point picking cancelled', '');
+            }
+        }
+        document.addEventListener('keydown', onEsc);
+    }
+
     // ===== File Upload =====
     async function handleFileUpload(e, node) {
         const file = e.target.files[0];
@@ -1601,6 +1994,79 @@
         }
         html += '<div class="image-info" style="color:#585b70">Double-click image to enlarge</div>';
         el.innerHTML = html;
+
+        // Draw perspective point overlay if warp_perspective node
+        if (node.type === 'warp_perspective' && result.shape) {
+            const previewImg = el.querySelector('img');
+            if (previewImg) {
+                previewImg.addEventListener('load', () => _drawPerspectiveOverlay(el, node, result.shape));
+                if (previewImg.complete) _drawPerspectiveOverlay(el, node, result.shape);
+            }
+        }
+    }
+
+    function _drawPerspectiveOverlay(el, node, shape) {
+        const previewImg = el.querySelector('img');
+        if (!previewImg) return;
+        // Remove existing overlay
+        const oldCvs = el.querySelector('.persp-overlay');
+        if (oldCvs) oldCvs.remove();
+
+        const w = previewImg.clientWidth, h = previewImg.clientHeight;
+        if (w === 0 || h === 0) return;
+        const imgW = shape[1], imgH = shape[0];
+
+        const cvs = document.createElement('canvas');
+        cvs.className = 'persp-overlay';
+        cvs.width = w; cvs.height = h;
+        cvs.style.cssText = `position:absolute;top:0;left:0;pointer-events:none;`;
+
+        // Wrap image if not already wrapped
+        let wrap = previewImg.parentNode;
+        if (!wrap.classList.contains('preview-canvas-wrap')) {
+            wrap = document.createElement('div');
+            wrap.className = 'preview-canvas-wrap';
+            wrap.style.cssText = 'position:relative;display:inline-block;';
+            previewImg.parentNode.insertBefore(wrap, previewImg);
+            wrap.appendChild(previewImg);
+        }
+        wrap.appendChild(cvs);
+
+        const ctx2 = cvs.getContext('2d');
+        const labels = ['TL', 'TR', 'BR', 'BL'];
+
+        function drawPointSet(ptsStr, color) {
+            if (!ptsStr) return;
+            const pts = ptsStr.split(';').map(p => {
+                const [x, y] = p.split(',').map(Number);
+                return { x: (x / imgW) * w, y: (y / imgH) * h };
+            });
+            if (pts.length !== 4) return;
+            // Draw polygon
+            ctx2.strokeStyle = color;
+            ctx2.lineWidth = 2;
+            ctx2.setLineDash([4, 4]);
+            ctx2.beginPath();
+            ctx2.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < 4; i++) ctx2.lineTo(pts[i].x, pts[i].y);
+            ctx2.closePath();
+            ctx2.stroke();
+            ctx2.setLineDash([]);
+            // Draw points
+            for (let i = 0; i < 4; i++) {
+                ctx2.fillStyle = color;
+                ctx2.beginPath();
+                ctx2.arc(pts[i].x, pts[i].y, 5, 0, Math.PI * 2);
+                ctx2.fill();
+                ctx2.fillStyle = '#fff';
+                ctx2.font = 'bold 8px sans-serif';
+                ctx2.textAlign = 'center';
+                ctx2.textBaseline = 'middle';
+                ctx2.fillText(labels[i], pts[i].x, pts[i].y);
+            }
+        }
+        drawPointSet(node.properties.srcPoints, '#89b4fa');
+        drawPointSet(node.properties.dstPoints, '#f38ba8');
     }
 
     // ===== Image Popup (Image Show) =====
@@ -1937,38 +2403,94 @@
             zoom: state.zoom,
             nextNodeId: state.nextNodeId,
         };
-        const jsonStr = JSON.stringify(flowData, null, 2);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
 
-        // showSaveFilePicker — 클라이언트 로컬 폴더 선택 (Chrome/Edge, secure context)
-        if (window.showSaveFilePicker) {
+        // Check if any node has an imageId (needs project ZIP save)
+        const hasImages = state.nodes.some(n => n.properties.imageId);
+
+        if (hasImages) {
+            // Save as ZIP project (flow.json + images/)
+            setStatus('Saving project with images...', '');
             try {
-                const handle = await window.showSaveFilePicker({
-                    suggestedName: 'nodeopencv-flow.json',
-                    types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+                const resp = await sessionFetch('/api/save_project', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(flowData),
                 });
-                const writable = await handle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                setStatus('Flow saved: ' + handle.name, 'success');
-                return;
-            } catch (err) {
-                if (err.name === 'AbortError') return;
-                // fall through
-            }
-        }
+                if (!resp.ok) {
+                    let errMsg = 'HTTP ' + resp.status;
+                    try {
+                        const ct = resp.headers.get('content-type') || '';
+                        if (ct.includes('application/json')) {
+                            const err = await resp.json();
+                            errMsg = err.error || errMsg;
+                        }
+                    } catch (_) { /* ignore parse errors */ }
+                    setStatus('Save failed: ' + errMsg, 'error');
+                    return;
+                }
+                const blob = await resp.blob();
 
-        // Fallback — 브라우저 다운로드 (다운로드 폴더)
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'nodeopencv-flow.json';
-        a.click();
-        URL.revokeObjectURL(url);
-        setStatus('Flow saved (downloaded to default folder)', 'success');
+                // showSaveFilePicker — 클라이언트 로컬 폴더 선택 (Chrome/Edge, secure context)
+                if (window.showSaveFilePicker) {
+                    try {
+                        const handle = await window.showSaveFilePicker({
+                            suggestedName: 'nodeopencv-project.zip',
+                            types: [{ description: 'ZIP Files', accept: { 'application/zip': ['.zip'] } }],
+                        });
+                        const writable = await handle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                        setStatus('Project saved (with images): ' + handle.name, 'success');
+                        return;
+                    } catch (err) {
+                        if (err.name === 'AbortError') return;
+                        // fall through
+                    }
+                }
+
+                // Fallback — 브라우저 다운로드
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'nodeopencv-project.zip';
+                a.click();
+                URL.revokeObjectURL(url);
+                setStatus('Project saved with images (downloaded)', 'success');
+            } catch (err) {
+                setStatus('Save project failed: ' + err.message, 'error');
+            }
+        } else {
+            // No images — save as simple JSON
+            const jsonStr = JSON.stringify(flowData, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+
+            if (window.showSaveFilePicker) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: 'nodeopencv-flow.json',
+                        types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    setStatus('Flow saved: ' + handle.name, 'success');
+                    return;
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                }
+            }
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'nodeopencv-flow.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            setStatus('Flow saved (downloaded to default folder)', 'success');
+        }
     }
 
-    function applyFlowData(data) {
+    function applyFlowData(data, imagePreviews) {
         state.nodes = data.nodes || [];
         state.connections = data.connections || [];
         state.pan = data.pan || { x: 0, y: 0 };
@@ -1979,6 +2501,24 @@
         state.nodeResults = {};
         Object.keys(_previewImageCache).forEach(k => delete _previewImageCache[k]);
         state.undoStack = [];
+
+        // Restore image previews for nodes that have imageId
+        if (imagePreviews) {
+            for (const node of state.nodes) {
+                const imgId = node.properties && node.properties.imageId;
+                if (imgId && imagePreviews[imgId]) {
+                    state.nodeResults[node.id] = {
+                        preview: imagePreviews[imgId].preview,
+                        shape: imagePreviews[imgId].shape,
+                    };
+                    // Update label with filename if available
+                    if (node.properties.filename) {
+                        node.label = node.properties.filename;
+                    }
+                }
+            }
+        }
+
         selectNode(null);
         updateStatusBar();
         document.getElementById('zoom-display').textContent = Math.round(state.zoom * 100) + '%';
@@ -1990,14 +2530,25 @@
         if (window.showOpenFilePicker) {
             try {
                 const [handle] = await window.showOpenFilePicker({
-                    types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+                    types: [{
+                        description: 'Project / Flow Files',
+                        accept: {
+                            'application/zip': ['.zip'],
+                            'application/json': ['.json'],
+                        },
+                    }],
                     multiple: false,
                 });
                 const file = await handle.getFile();
-                const text = await file.text();
-                const data = JSON.parse(text);
-                applyFlowData(data);
-                setStatus('Flow loaded: ' + file.name, 'success');
+
+                if (file.name.endsWith('.zip')) {
+                    await loadProjectZip(file);
+                } else {
+                    const text = await file.text();
+                    const data = JSON.parse(text);
+                    applyFlowData(data, null);
+                    setStatus('Flow loaded: ' + file.name, 'success');
+                }
                 return;
             } catch (err) {
                 if (err.name === 'AbortError') return;
@@ -2008,23 +2559,65 @@
         // Fallback — hidden file input
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.json';
-        input.onchange = (e) => {
+        input.accept = '.json,.zip';
+        input.onchange = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                try {
-                    const data = JSON.parse(ev.target.result);
-                    applyFlowData(data);
-                    setStatus('Flow loaded: ' + file.name, 'success');
-                } catch (err) {
-                    setStatus('Failed to load flow: ' + err.message, 'error');
-                }
-            };
-            reader.readAsText(file);
+
+            if (file.name.endsWith('.zip')) {
+                await loadProjectZip(file);
+            } else {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
+                        applyFlowData(data, null);
+                        setStatus('Flow loaded: ' + file.name, 'success');
+                    } catch (err) {
+                        setStatus('Failed to load flow: ' + err.message, 'error');
+                    }
+                };
+                reader.readAsText(file);
+            }
         };
         input.click();
+    }
+
+    async function loadProjectZip(file) {
+        setStatus('Loading project with images...', '');
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const resp = await sessionFetch('/api/load_project', {
+                method: 'POST',
+                body: formData,
+            });
+            if (!resp.ok) {
+                let errMsg = 'HTTP ' + resp.status;
+                try {
+                    const ct = resp.headers.get('content-type') || '';
+                    if (ct.includes('application/json')) {
+                        const err = await resp.json();
+                        errMsg = err.error || errMsg;
+                    }
+                } catch (_) { /* ignore parse errors */ }
+                setStatus('Load failed: ' + errMsg, 'error');
+                return;
+            }
+            const data = await resp.json();
+            if (data.error) {
+                setStatus('Load failed: ' + data.error, 'error');
+                return;
+            }
+            const flow = data.flow;
+            const imagePreviews = data.images || {};
+            applyFlowData(flow, imagePreviews);
+
+            const imgCount = Object.keys(imagePreviews).length;
+            setStatus(`Project loaded: ${file.name} (${imgCount} image${imgCount !== 1 ? 's' : ''} restored)`, 'success');
+        } catch (err) {
+            setStatus('Load project failed: ' + err.message, 'error');
+        }
     }
 
     // ===== Toolbar buttons =====

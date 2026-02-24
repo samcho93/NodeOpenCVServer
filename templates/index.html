@@ -200,6 +200,9 @@
                     <div class="palette-node" data-type="crop" draggable="true">
                         <span class="node-color" style="background:#00BCD4"></span>Crop
                     </div>
+                    <div class="palette-node" data-type="paste_image" draggable="true">
+                        <span class="node-color" style="background:#00BCD4"></span>Paste Image
+                    </div>
                     <div class="palette-node" data-type="warp_affine" draggable="true">
                         <span class="node-color" style="background:#00BCD4"></span>Warp Affine
                     </div>
@@ -358,6 +361,9 @@
                     </div>
                     <div class="palette-node" data-type="val_list" draggable="true">
                         <span class="node-color" style="background:#78909C"></span>List Index/Slice
+                    </div>
+                    <div class="palette-node" data-type="val_coords" draggable="true">
+                        <span class="node-color" style="background:#78909C"></span>Coords
                     </div>
                 </div>
             </div>
@@ -551,8 +557,8 @@ img_output = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)</div>
                     <div class="help-section">
                         <h4>7. Save &amp; Load</h4>
                         <ul>
-                            <li><em>Save</em>: Downloads the flow as a JSON file (images are not included).</li>
-                            <li><em>Load</em>: Opens a saved JSON flow. Images need to be re-uploaded after loading.</li>
+                            <li><em>Save</em>: 이미지가 포함된 경우 ZIP 프로젝트 파일로 저장 (flow.json + images/ 폴더). 이미지가 없으면 JSON으로 저장.</li>
+                            <li><em>Load</em>: ZIP 프로젝트 파일 또는 JSON 파일을 불러옵니다. ZIP의 경우 이미지도 함께 복원되어 프리뷰가 표시됩니다.</li>
                         </ul>
                     </div>
 

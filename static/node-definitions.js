@@ -378,22 +378,22 @@ const NODE_DEFS = {
             { key: 'operation', label: 'Operation', type: 'select', default: 'MORPH_OPEN',
               options: ['MORPH_ERODE', 'MORPH_DILATE', 'MORPH_OPEN', 'MORPH_CLOSE', 'MORPH_GRADIENT', 'MORPH_TOPHAT', 'MORPH_BLACKHAT']
             },
-            { key: 'ksize', label: 'Kernel Size', type: 'number', default: 5, min: 1, step: 2 },
+            { key: 'ksize', label: 'Kernel Size', type: 'number', default: 5, min: 3, max: 31, step: 2 },
             { key: 'shape', label: 'Kernel Shape', type: 'select', default: 'MORPH_RECT',
-              options: ['MORPH_RECT', 'MORPH_CROSS', 'MORPH_ELLIPSE']
+              options: ['MORPH_RECT', 'MORPH_CROSS', 'MORPH_ELLIPSE', 'custom']
             },
+            { key: 'kernelData', label: 'Custom Kernel', type: 'kernel', default: '1,1,1,1,1,1,1,1,1' },
             { key: 'iterations', label: 'Iterations', type: 'number', default: 1, min: 1 }
         ],
         doc: {
-            signature: 'cv2.morphologyEx(src, op, kernel[, dst[, anchor[, iterations[, borderType[, borderValue]]]]])',
-            description: 'Performs advanced morphological transformations: opening, closing, gradient, top hat, black hat.',
+            signature: 'cv2.morphologyEx(src, op, kernel)',
+            description: 'Performs advanced morphological transformations. Choose a preset kernel shape or define a custom binary kernel (0/1 values).',
             params: [
-                { name: 'src', desc: 'Source image. Number of channels can be arbitrary.' },
-                { name: 'op', desc: 'Type of morphological operation: MORPH_OPEN, MORPH_CLOSE, MORPH_GRADIENT, MORPH_TOPHAT, MORPH_BLACKHAT' },
-                { name: 'kernel', desc: 'Structuring element. Created with getStructuringElement().' },
-                { name: 'iterations', desc: 'Number of times erosion and dilation are applied' }
+                { name: 'op', desc: 'MORPH_OPEN, MORPH_CLOSE, MORPH_GRADIENT, MORPH_TOPHAT, MORPH_BLACKHAT' },
+                { name: 'kernel', desc: 'Structuring element: preset shape or custom 0/1 grid' },
+                { name: 'iterations', desc: 'Number of times the operation is applied' }
             ],
-            returns: 'numpy.ndarray - Destination image of the same size and type as source'
+            returns: 'numpy.ndarray - Morphologically transformed image'
         }
     },
 
@@ -404,15 +404,18 @@ const NODE_DEFS = {
         inputs: [{ id: 'image', label: 'image' }],
         outputs: [{ id: 'image', label: 'image' }],
         properties: [
-            { key: 'ksize', label: 'Kernel Size', type: 'number', default: 5, min: 1, step: 2 },
+            { key: 'ksize', label: 'Kernel Size', type: 'number', default: 5, min: 3, max: 31, step: 2 },
+            { key: 'shape', label: 'Kernel Shape', type: 'select', default: 'MORPH_RECT',
+              options: ['MORPH_RECT', 'MORPH_CROSS', 'MORPH_ELLIPSE', 'custom']
+            },
+            { key: 'kernelData', label: 'Custom Kernel', type: 'kernel', default: '1,1,1,1,1,1,1,1,1' },
             { key: 'iterations', label: 'Iterations', type: 'number', default: 1, min: 1 }
         ],
         doc: {
-            signature: 'cv2.dilate(src, kernel[, dst[, anchor[, iterations[, borderType[, borderValue]]]]])',
-            description: 'Dilates an image by using a specific structuring element. Expands bright regions.',
+            signature: 'cv2.dilate(src, kernel[, iterations])',
+            description: 'Dilates an image using a structuring element. Choose a preset shape or define a custom binary kernel.',
             params: [
-                { name: 'src', desc: 'Input image; number of channels can be arbitrary' },
-                { name: 'kernel', desc: 'Structuring element used for dilation' },
+                { name: 'kernel', desc: 'Structuring element: preset shape or custom 0/1 grid' },
                 { name: 'iterations', desc: 'Number of times dilation is applied' }
             ],
             returns: 'numpy.ndarray - Dilated image'
@@ -426,15 +429,18 @@ const NODE_DEFS = {
         inputs: [{ id: 'image', label: 'image' }],
         outputs: [{ id: 'image', label: 'image' }],
         properties: [
-            { key: 'ksize', label: 'Kernel Size', type: 'number', default: 5, min: 1, step: 2 },
+            { key: 'ksize', label: 'Kernel Size', type: 'number', default: 5, min: 3, max: 31, step: 2 },
+            { key: 'shape', label: 'Kernel Shape', type: 'select', default: 'MORPH_RECT',
+              options: ['MORPH_RECT', 'MORPH_CROSS', 'MORPH_ELLIPSE', 'custom']
+            },
+            { key: 'kernelData', label: 'Custom Kernel', type: 'kernel', default: '1,1,1,1,1,1,1,1,1' },
             { key: 'iterations', label: 'Iterations', type: 'number', default: 1, min: 1 }
         ],
         doc: {
-            signature: 'cv2.erode(src, kernel[, dst[, anchor[, iterations[, borderType[, borderValue]]]]])',
-            description: 'Erodes an image by using a specific structuring element. Shrinks bright regions.',
+            signature: 'cv2.erode(src, kernel[, iterations])',
+            description: 'Erodes an image using a structuring element. Choose a preset shape or define a custom binary kernel.',
             params: [
-                { name: 'src', desc: 'Input image; number of channels can be arbitrary' },
-                { name: 'kernel', desc: 'Structuring element used for erosion' },
+                { name: 'kernel', desc: 'Structuring element: preset shape or custom 0/1 grid' },
                 { name: 'iterations', desc: 'Number of times erosion is applied' }
             ],
             returns: 'numpy.ndarray - Eroded image'
@@ -500,7 +506,9 @@ const NODE_DEFS = {
         properties: [
             { key: 'alpha', label: 'Alpha', type: 'number', default: 0.5, step: 0.1 },
             { key: 'beta', label: 'Beta', type: 'number', default: 0.5, step: 0.1 },
-            { key: 'gamma', label: 'Gamma', type: 'number', default: 0, step: 1 }
+            { key: 'gamma', label: 'Gamma', type: 'number', default: 0, step: 1 },
+            { key: 'sizeMismatch', label: 'Size Mismatch', type: 'select', default: 'error',
+              options: ['error', 'resize_img2', 'resize_img1'] }
         ],
         doc: {
             signature: 'cv2.addWeighted(src1, alpha, src2, beta, gamma[, dst[, dtype]])',
@@ -522,7 +530,10 @@ const NODE_DEFS = {
         color: '#3F51B5',
         inputs: [{ id: 'image', label: 'image' }, { id: 'image2', label: 'image2' }, { id: 'mask', label: 'mask', optional: true }],
         outputs: [{ id: 'image', label: 'image' }],
-        properties: [],
+        properties: [
+            { key: 'sizeMismatch', label: 'Size Mismatch', type: 'select', default: 'error',
+              options: ['error', 'resize_img2', 'resize_img1'] }
+        ],
         doc: {
             signature: 'cv2.bitwise_and(src1, src2[, dst[, mask]])',
             description: 'Computes bitwise conjunction of two arrays. If mask is provided, operation is applied only where mask is non-zero.',
@@ -541,7 +552,10 @@ const NODE_DEFS = {
         color: '#3F51B5',
         inputs: [{ id: 'image', label: 'image' }, { id: 'image2', label: 'image2' }, { id: 'mask', label: 'mask', optional: true }],
         outputs: [{ id: 'image', label: 'image' }],
-        properties: [],
+        properties: [
+            { key: 'sizeMismatch', label: 'Size Mismatch', type: 'select', default: 'error',
+              options: ['error', 'resize_img2', 'resize_img1'] }
+        ],
         doc: {
             signature: 'cv2.bitwise_or(src1, src2[, dst[, mask]])',
             description: 'Computes bitwise disjunction of two arrays. If mask is provided, operation is applied only where mask is non-zero.',
@@ -812,10 +826,12 @@ img_output = img_input.copy()
         inputs: [{ id: 'image', label: 'image' }],
         outputs: [{ id: 'image', label: 'image' }],
         properties: [
-            { key: 'kernelSize', label: 'Kernel Size', type: 'number', default: 3, min: 1, step: 2 },
-            { key: 'preset', label: 'Preset Kernel', type: 'select', default: 'sharpen', options: ['identity', 'sharpen', 'edge_detect', 'emboss', 'custom'] }
+            { key: 'kernelSize', label: 'Kernel Size', type: 'number', default: 3, min: 3, max: 9, step: 2 },
+            { key: 'preset', label: 'Preset Kernel', type: 'select', default: 'sharpen',
+              options: ['identity', 'sharpen', 'edge_detect', 'emboss', 'ridge', 'blur', 'custom'] },
+            { key: 'kernelData', label: 'Custom Kernel', type: 'kernel', default: '0,-1,0,-1,5,-1,0,-1,0' }
         ],
-        doc: { signature: 'cv2.filter2D(src, ddepth, kernel)', description: 'Convolves an image with a custom kernel. Choose from preset kernels or define custom.', params: [{ name: 'src', desc: 'Input image' }, { name: 'kernel', desc: 'Convolution kernel (numpy array)' }], returns: 'numpy.ndarray - Filtered image' }
+        doc: { signature: 'cv2.filter2D(src, ddepth, kernel)', description: 'Convolves an image with a custom kernel. Choose from preset kernels or define a custom NxN kernel.', params: [{ name: 'src', desc: 'Input image' }, { name: 'kernel', desc: 'Convolution kernel (numpy array)' }], returns: 'numpy.ndarray - Filtered image' }
     },
 
     // ---- Edge (new) ----
@@ -850,11 +866,13 @@ img_output = img_input.copy()
         inputs: [],
         outputs: [{ id: 'image', label: 'element' }],
         properties: [
-            { key: 'shape', label: 'Shape', type: 'select', default: 'MORPH_RECT', options: ['MORPH_RECT', 'MORPH_CROSS', 'MORPH_ELLIPSE'] },
-            { key: 'width', label: 'Width', type: 'number', default: 5, min: 1, step: 2 },
-            { key: 'height', label: 'Height', type: 'number', default: 5, min: 1, step: 2 }
+            { key: 'shape', label: 'Shape', type: 'select', default: 'MORPH_RECT',
+              options: ['MORPH_RECT', 'MORPH_CROSS', 'MORPH_ELLIPSE', 'custom'] },
+            { key: 'width', label: 'Width', type: 'number', default: 5, min: 3, max: 31, step: 2 },
+            { key: 'height', label: 'Height', type: 'number', default: 5, min: 3, max: 31, step: 2 },
+            { key: 'kernelData', label: 'Custom Kernel', type: 'kernel', default: '1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1' }
         ],
-        doc: { signature: 'cv2.getStructuringElement(shape, ksize)', description: 'Creates a structuring element for morphological operations.', params: [{ name: 'shape', desc: 'MORPH_RECT, MORPH_CROSS, or MORPH_ELLIPSE' }, { name: 'ksize', desc: 'Size of the structuring element (width, height)' }], returns: 'numpy.ndarray - Structuring element matrix' }
+        doc: { signature: 'cv2.getStructuringElement(shape, ksize)', description: 'Creates a structuring element for morphological operations. Choose a preset shape or define a custom binary (0/1) kernel.', params: [{ name: 'shape', desc: 'MORPH_RECT, MORPH_CROSS, MORPH_ELLIPSE, or custom' }, { name: 'ksize', desc: 'Size of the structuring element (width, height)' }], returns: 'numpy.ndarray - Structuring element matrix' }
     },
 
     // ---- Contour (new category) ----
@@ -876,14 +894,14 @@ img_output = img_input.copy()
     bounding_rect: {
         label: 'Bounding Rect', category: 'contour', color: '#009688',
         inputs: [{ id: 'image', label: 'image' }, { id: 'contours', label: 'contours' }],
-        outputs: [{ id: 'image', label: 'image' }],
+        outputs: [{ id: 'image', label: 'image' }, { id: 'coords', label: 'coords' }],
         properties: [
             { key: 'thickness', label: 'Thickness', type: 'number', default: 2, min: 1 },
             { key: 'colorR', label: 'Color R', type: 'number', default: 0, min: 0, max: 255 },
             { key: 'colorG', label: 'Color G', type: 'number', default: 255, min: 0, max: 255 },
             { key: 'colorB', label: 'Color B', type: 'number', default: 0, min: 0, max: 255 }
         ],
-        doc: { signature: 'cv2.boundingRect + cv2.rectangle', description: 'Draws bounding rectangles around contours. Connect Find Contours node to provide contour data.', params: [{ name: 'thickness', desc: 'Line thickness' }], returns: 'numpy.ndarray - Image with bounding rectangles' }
+        doc: { signature: 'cv2.boundingRect + cv2.rectangle', description: 'Draws bounding rectangles around contours. Outputs coords as [[x1,y1,x2,y2], ...] for connecting to Image Extract.', params: [{ name: 'thickness', desc: 'Line thickness' }], returns: 'numpy.ndarray - Image with bounding rectangles + coords list' }
     },
 
     min_enclosing_circle: {
@@ -1134,17 +1152,44 @@ img_output = img_input.copy()
         doc: { signature: 'img[y:y+h, x:x+w]', description: 'Crops a rectangular region of interest (ROI) from the image.', params: [{ name: 'x', desc: 'Left edge of ROI' }, { name: 'y', desc: 'Top edge of ROI' }, { name: 'width', desc: 'Width of ROI' }, { name: 'height', desc: 'Height of ROI' }], returns: 'numpy.ndarray - Cropped image' }
     },
 
+    paste_image: {
+        label: 'Paste Image', category: 'transform', color: '#00BCD4',
+        inputs: [{ id: 'image', label: 'base image' }, { id: 'overlay', label: 'overlay' }],
+        outputs: [{ id: 'image', label: 'image' }],
+        properties: [
+            { key: 'x', label: 'X (Left)', type: 'number', default: 0, min: 0 },
+            { key: 'y', label: 'Y (Top)', type: 'number', default: 0, min: 0 },
+            { key: 'mode', label: 'Mode', type: 'select', default: 'overwrite',
+              options: ['overwrite', 'blend', 'alpha_channel'] },
+            { key: 'opacity', label: 'Opacity', type: 'number', default: 1.0, min: 0, max: 1, step: 0.05 }
+        ],
+        doc: {
+            signature: 'base[y:y+oh, x:x+ow] = overlay',
+            description: 'Pastes a smaller overlay image onto a base image at the specified (x, y) position. Overwrite mode replaces pixels directly. Blend mode uses the opacity value for alpha blending. Alpha Channel mode uses the overlay\'s 4th channel (BGRA) as a per-pixel mask.',
+            params: [
+                { name: 'base', desc: 'Background / target image' },
+                { name: 'overlay', desc: 'Foreground image to paste (from Crop, etc.)' },
+                { name: 'x, y', desc: 'Top-left position on the base image' },
+                { name: 'mode', desc: 'overwrite = replace pixels, blend = alpha blending, alpha_channel = use overlay alpha' },
+                { name: 'opacity', desc: 'Blending opacity (0.0~1.0), used in blend and alpha_channel modes' }
+            ],
+            returns: 'numpy.ndarray - Base image with overlay pasted'
+        }
+    },
+
     warp_affine: {
         label: 'Warp Affine', category: 'transform', color: '#00BCD4',
         inputs: [{ id: 'image', label: 'image' }],
         outputs: [{ id: 'image', label: 'image' }],
         properties: [
+            { key: 'affinePreset', label: 'Preset', type: 'select', default: 'custom',
+              options: ['custom', 'identity', 'translate_50_30', 'rotate_30', 'rotate_45', 'rotate_90', 'scale_half', 'scale_double', 'flip_h', 'flip_v', 'shear_x', 'shear_y'] },
             { key: 'm00', label: 'M[0,0]', type: 'number', default: 1, step: 0.1 },
             { key: 'm01', label: 'M[0,1]', type: 'number', default: 0, step: 0.1 },
-            { key: 'm02', label: 'M[0,2] (tx)', type: 'number', default: 0 },
+            { key: 'm02', label: 'M[0,2] (tx)', type: 'number', default: 0, step: 1 },
             { key: 'm10', label: 'M[1,0]', type: 'number', default: 0, step: 0.1 },
             { key: 'm11', label: 'M[1,1]', type: 'number', default: 1, step: 0.1 },
-            { key: 'm12', label: 'M[1,2] (ty)', type: 'number', default: 0 }
+            { key: 'm12', label: 'M[1,2] (ty)', type: 'number', default: 0, step: 1 }
         ],
         doc: { signature: 'cv2.warpAffine(src, M, dsize)', description: 'Applies an affine transformation (2x3 matrix) to the image. Supports translation, rotation, scaling, and shearing.', params: [{ name: 'M', desc: '2x3 transformation matrix' }, { name: 'dsize', desc: 'Output image size' }], returns: 'numpy.ndarray - Transformed image' }
     },
@@ -1154,16 +1199,12 @@ img_output = img_input.copy()
         inputs: [{ id: 'image', label: 'image' }],
         outputs: [{ id: 'image', label: 'image' }],
         properties: [
-            { key: 'srcX1', label: 'Src X1', type: 'number', default: 0 }, { key: 'srcY1', label: 'Src Y1', type: 'number', default: 0 },
-            { key: 'srcX2', label: 'Src X2', type: 'number', default: 300 }, { key: 'srcY2', label: 'Src Y2', type: 'number', default: 0 },
-            { key: 'srcX3', label: 'Src X3', type: 'number', default: 300 }, { key: 'srcY3', label: 'Src Y3', type: 'number', default: 300 },
-            { key: 'srcX4', label: 'Src X4', type: 'number', default: 0 }, { key: 'srcY4', label: 'Src Y4', type: 'number', default: 300 },
-            { key: 'dstX1', label: 'Dst X1', type: 'number', default: 0 }, { key: 'dstY1', label: 'Dst Y1', type: 'number', default: 0 },
-            { key: 'dstX2', label: 'Dst X2', type: 'number', default: 300 }, { key: 'dstY2', label: 'Dst Y2', type: 'number', default: 0 },
-            { key: 'dstX3', label: 'Dst X3', type: 'number', default: 300 }, { key: 'dstY3', label: 'Dst Y3', type: 'number', default: 300 },
-            { key: 'dstX4', label: 'Dst X4', type: 'number', default: 0 }, { key: 'dstY4', label: 'Dst Y4', type: 'number', default: 300 }
+            { key: 'srcPoints', label: 'Source Points', type: 'perspective_points', role: 'src',
+              default: '0,0;300,0;300,300;0,300' },
+            { key: 'dstPoints', label: 'Dest Points', type: 'perspective_points', role: 'dst',
+              default: '0,0;300,0;300,300;0,300' }
         ],
-        doc: { signature: 'cv2.getPerspectiveTransform + cv2.warpPerspective', description: 'Applies perspective transformation using 4 source and 4 destination corner points.', params: [{ name: 'src points', desc: '4 source corner coordinates' }, { name: 'dst points', desc: '4 destination corner coordinates' }], returns: 'numpy.ndarray - Perspective-transformed image' }
+        doc: { signature: 'cv2.getPerspectiveTransform + cv2.warpPerspective', description: 'Applies perspective transformation using 4 source and 4 destination corner points. Click "Pick" to interactively select points on the preview image.', params: [{ name: 'src points', desc: '4 source corner coordinates (top-left, top-right, bottom-right, bottom-left)' }, { name: 'dst points', desc: '4 destination corner coordinates' }], returns: 'numpy.ndarray - Perspective-transformed image' }
     },
 
     remap: {
@@ -1196,16 +1237,22 @@ img_output = img_input.copy()
         label: 'Add', category: 'arithmetic', color: '#3F51B5',
         inputs: [{ id: 'image', label: 'image' }, { id: 'image2', label: 'image2' }],
         outputs: [{ id: 'image', label: 'image' }],
-        properties: [],
-        doc: { signature: 'cv2.add(src1, src2)', description: 'Per-element sum of two images (saturated).', params: [{ name: 'src1', desc: 'First input image' }, { name: 'src2', desc: 'Second input image' }], returns: 'numpy.ndarray - Sum image' }
+        properties: [
+            { key: 'sizeMismatch', label: 'Size Mismatch', type: 'select', default: 'error',
+              options: ['error', 'resize_img2', 'resize_img1'] }
+        ],
+        doc: { signature: 'cv2.add(src1, src2)', description: 'Per-element sum of two images (saturated). Images must be the same size — use Size Mismatch option to handle different sizes.', params: [{ name: 'src1', desc: 'First input image' }, { name: 'src2', desc: 'Second input image' }], returns: 'numpy.ndarray - Sum image' }
     },
 
     subtract: {
         label: 'Subtract', category: 'arithmetic', color: '#3F51B5',
         inputs: [{ id: 'image', label: 'image' }, { id: 'image2', label: 'image2' }],
         outputs: [{ id: 'image', label: 'image' }],
-        properties: [],
-        doc: { signature: 'cv2.subtract(src1, src2)', description: 'Per-element difference of two images (saturated).', params: [{ name: 'src1', desc: 'First input image' }, { name: 'src2', desc: 'Second input image' }], returns: 'numpy.ndarray - Difference image' }
+        properties: [
+            { key: 'sizeMismatch', label: 'Size Mismatch', type: 'select', default: 'error',
+              options: ['error', 'resize_img2', 'resize_img1'] }
+        ],
+        doc: { signature: 'cv2.subtract(src1, src2)', description: 'Per-element difference of two images (saturated). Images must be the same size — use Size Mismatch option to handle different sizes.', params: [{ name: 'src1', desc: 'First input image' }, { name: 'src2', desc: 'Second input image' }], returns: 'numpy.ndarray - Difference image' }
     },
 
     multiply: {
@@ -1213,25 +1260,33 @@ img_output = img_input.copy()
         inputs: [{ id: 'image', label: 'image' }, { id: 'image2', label: 'image2' }],
         outputs: [{ id: 'image', label: 'image' }],
         properties: [
-            { key: 'scale', label: 'Scale', type: 'number', default: 1.0, step: 0.1 }
+            { key: 'scale', label: 'Scale', type: 'number', default: 1.0, step: 0.1 },
+            { key: 'sizeMismatch', label: 'Size Mismatch', type: 'select', default: 'error',
+              options: ['error', 'resize_img2', 'resize_img1'] }
         ],
-        doc: { signature: 'cv2.multiply(src1, src2, scale)', description: 'Per-element product of two images with optional scale.', params: [{ name: 'src1', desc: 'First input image' }, { name: 'src2', desc: 'Second input image' }, { name: 'scale', desc: 'Scale factor' }], returns: 'numpy.ndarray - Product image' }
+        doc: { signature: 'cv2.multiply(src1, src2, scale)', description: 'Per-element product of two images with optional scale. Images must be the same size — use Size Mismatch option to handle different sizes.', params: [{ name: 'src1', desc: 'First input image' }, { name: 'src2', desc: 'Second input image' }, { name: 'scale', desc: 'Scale factor' }], returns: 'numpy.ndarray - Product image' }
     },
 
     absdiff: {
         label: 'AbsDiff', category: 'arithmetic', color: '#3F51B5',
         inputs: [{ id: 'image', label: 'image' }, { id: 'image2', label: 'image2' }],
         outputs: [{ id: 'image', label: 'image' }],
-        properties: [],
-        doc: { signature: 'cv2.absdiff(src1, src2)', description: 'Per-element absolute difference of two images.', params: [{ name: 'src1', desc: 'First input image' }, { name: 'src2', desc: 'Second input image' }], returns: 'numpy.ndarray - Absolute difference image' }
+        properties: [
+            { key: 'sizeMismatch', label: 'Size Mismatch', type: 'select', default: 'error',
+              options: ['error', 'resize_img2', 'resize_img1'] }
+        ],
+        doc: { signature: 'cv2.absdiff(src1, src2)', description: 'Per-element absolute difference of two images. Images must be the same size — use Size Mismatch option to handle different sizes.', params: [{ name: 'src1', desc: 'First input image' }, { name: 'src2', desc: 'Second input image' }], returns: 'numpy.ndarray - Absolute difference image' }
     },
 
     bitwise_xor: {
         label: 'Bitwise XOR', category: 'arithmetic', color: '#3F51B5',
         inputs: [{ id: 'image', label: 'image' }, { id: 'image2', label: 'image2' }, { id: 'mask', label: 'mask', optional: true }],
         outputs: [{ id: 'image', label: 'image' }],
-        properties: [],
-        doc: { signature: 'cv2.bitwise_xor(src1, src2[, dst[, mask]])', description: 'Per-element bitwise exclusive-or of two images. If mask is provided, operation is applied only where mask is non-zero.', params: [{ name: 'src1', desc: 'First input image' }, { name: 'src2', desc: 'Second input image' }, { name: 'mask', desc: 'Optional 8-bit single channel mask' }], returns: 'numpy.ndarray - XOR result' }
+        properties: [
+            { key: 'sizeMismatch', label: 'Size Mismatch', type: 'select', default: 'error',
+              options: ['error', 'resize_img2', 'resize_img1'] }
+        ],
+        doc: { signature: 'cv2.bitwise_xor(src1, src2[, dst[, mask]])', description: 'Per-element bitwise exclusive-or of two images. If mask is provided, operation is applied only where mask is non-zero. Images must be the same size — use Size Mismatch option to handle different sizes.', params: [{ name: 'src1', desc: 'First input image' }, { name: 'src2', desc: 'Second input image' }, { name: 'mask', desc: 'Optional 8-bit single channel mask' }], returns: 'numpy.ndarray - XOR result' }
     },
 
     // ---- Detection (new category) ----
@@ -1239,7 +1294,7 @@ img_output = img_input.copy()
     haar_cascade: {
         label: 'Haar Cascade', category: 'detection', color: '#FF5722',
         inputs: [{ id: 'image', label: 'image' }],
-        outputs: [{ id: 'image', label: 'image' }],
+        outputs: [{ id: 'image', label: 'image' }, { id: 'coords', label: 'coords' }],
         properties: [
             { key: 'cascadeType', label: 'Cascade Type', type: 'select', default: 'face', options: ['face', 'eye', 'smile', 'body', 'cat_face'] },
             { key: 'scaleFactor', label: 'Scale Factor', type: 'number', default: 1.1, step: 0.05 },
@@ -1247,7 +1302,7 @@ img_output = img_input.copy()
             { key: 'minWidth', label: 'Min Width', type: 'number', default: 30, min: 1 },
             { key: 'minHeight', label: 'Min Height', type: 'number', default: 30, min: 1 }
         ],
-        doc: { signature: 'cv2.CascadeClassifier.detectMultiScale()', description: 'Object detection using Haar cascade classifiers (face, eyes, smile, etc.).', params: [{ name: 'cascadeType', desc: 'Type of cascade: face, eye, smile, body, cat_face' }, { name: 'scaleFactor', desc: 'How much image size is reduced at each scale' }, { name: 'minNeighbors', desc: 'How many neighbors each candidate rectangle should have' }], returns: 'numpy.ndarray - Image with detected objects outlined' }
+        doc: { signature: 'cv2.CascadeClassifier.detectMultiScale()', description: 'Object detection using Haar cascade classifiers (face, eyes, smile, etc.). Outputs coords as [[x1,y1,x2,y2], ...] for connecting to Image Extract.', params: [{ name: 'cascadeType', desc: 'Type of cascade: face, eye, smile, body, cat_face' }, { name: 'scaleFactor', desc: 'How much image size is reduced at each scale' }, { name: 'minNeighbors', desc: 'How many neighbors each candidate rectangle should have' }], returns: 'numpy.ndarray - Image with detected objects outlined + coords list' }
     },
 
     hough_circles: {
@@ -1398,6 +1453,33 @@ img_output = img_input.copy()
             { key: 'step', label: 'Step (slice)', type: 'number', default: 1, min: 1 }
         ],
         doc: { signature: 'List Index/Slice Node', description: 'Selects an element or a sub-list from an input list using indexing or slicing.', params: [{ name: 'mode', desc: 'index: single element, slice: sub-list' }, { name: 'index', desc: 'Index for single element (0-based, negative supported)' }, { name: 'start', desc: 'Slice start index' }, { name: 'stop', desc: 'Slice stop index (-1 means end)' }, { name: 'step', desc: 'Slice step' }], returns: 'value - indexed element or sliced sub-list' }
+    },
+
+    val_coords: {
+        label: 'Coords', category: 'value', color: '#78909C',
+        inputs: [],
+        outputs: [{ id: 'coords', label: 'coords' }],
+        properties: [
+            { key: 'mode', label: 'Mode', type: 'select', default: 'single',
+              options: ['single', 'multi'] },
+            { key: 'x1', label: 'X1 (Left)', type: 'number', default: 0, min: 0 },
+            { key: 'y1', label: 'Y1 (Top)', type: 'number', default: 0, min: 0 },
+            { key: 'x2', label: 'X2 (Right)', type: 'number', default: 100 },
+            { key: 'y2', label: 'Y2 (Bottom)', type: 'number', default: 100 },
+            { key: 'coordsList', label: 'Coords List (multi)', type: 'textarea',
+              default: '0,0,100,100\n50,50,200,200' }
+        ],
+        doc: {
+            signature: 'Coordinate Value Node',
+            description: 'Outputs coordinates in [[x1,y1,x2,y2], ...] format. Single mode uses the 4 number inputs. Multi mode parses the textarea (one "x1,y1,x2,y2" per line). Connect output to Image Extract coords input.',
+            params: [
+                { name: 'mode', desc: 'single: one rectangle from X1/Y1/X2/Y2. multi: multiple rectangles from textarea' },
+                { name: 'x1,y1', desc: 'Top-left corner' },
+                { name: 'x2,y2', desc: 'Bottom-right corner' },
+                { name: 'coordsList', desc: 'One "x1,y1,x2,y2" per line for multi mode' }
+            ],
+            returns: 'list - [[x1,y1,x2,y2], ...] coordinate list'
+        }
     },
 
     // ---- Detection (extra) ----

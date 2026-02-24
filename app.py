@@ -11,6 +11,8 @@ import json
 import time
 import threading
 import shutil
+import zipfile
+import io
 import cv2
 import numpy as np
 from flask import Flask, request, jsonify, send_from_directory, render_template, Response, stream_with_context, g, make_response
@@ -332,8 +334,20 @@ def process_morphology(node, inputs):
         ksize += 1
     iterations = max(1, int(props.get('iterations', 1)))
     shape_str = props.get('shape', 'MORPH_RECT')
-    shape = getattr(cv2, shape_str, cv2.MORPH_RECT)
-    kernel = cv2.getStructuringElement(shape, (ksize, ksize))
+    if shape_str == 'custom':
+        kernel_str = props.get('kernelData', '')
+        try:
+            values = [float(v.strip()) for v in kernel_str.split(',') if v.strip()]
+            n = len(values)
+            side = int(n ** 0.5)
+            if side * side != n or side < 1:
+                return {'image': img, 'error': f'Custom kernel has {n} values, needs a perfect square'}
+            kernel = np.array(values, dtype=np.uint8).reshape((side, side))
+        except Exception as e:
+            return {'image': img, 'error': f'Invalid custom kernel: {e}'}
+    else:
+        shape = getattr(cv2, shape_str, cv2.MORPH_RECT)
+        kernel = cv2.getStructuringElement(shape, (ksize, ksize))
     op_map = {
         'MORPH_ERODE': cv2.MORPH_ERODE,
         'MORPH_DILATE': cv2.MORPH_DILATE,
@@ -360,7 +374,21 @@ def process_dilate(node, inputs):
     if ksize % 2 == 0:
         ksize += 1
     iterations = max(1, int(props.get('iterations', 1)))
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (ksize, ksize))
+    shape_str = props.get('shape', 'MORPH_RECT')
+    if shape_str == 'custom':
+        kernel_str = props.get('kernelData', '')
+        try:
+            values = [float(v.strip()) for v in kernel_str.split(',') if v.strip()]
+            n = len(values)
+            side = int(n ** 0.5)
+            if side * side != n or side < 1:
+                return {'image': img, 'error': f'Custom kernel has {n} values, needs a perfect square'}
+            kernel = np.array(values, dtype=np.uint8).reshape((side, side))
+        except Exception as e:
+            return {'image': img, 'error': f'Invalid custom kernel: {e}'}
+    else:
+        shape = getattr(cv2, shape_str, cv2.MORPH_RECT)
+        kernel = cv2.getStructuringElement(shape, (ksize, ksize))
     result = cv2.dilate(img, kernel, iterations=iterations)
     return {'image': result}
 
@@ -377,7 +405,21 @@ def process_erode(node, inputs):
     if ksize % 2 == 0:
         ksize += 1
     iterations = max(1, int(props.get('iterations', 1)))
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (ksize, ksize))
+    shape_str = props.get('shape', 'MORPH_RECT')
+    if shape_str == 'custom':
+        kernel_str = props.get('kernelData', '')
+        try:
+            values = [float(v.strip()) for v in kernel_str.split(',') if v.strip()]
+            n = len(values)
+            side = int(n ** 0.5)
+            if side * side != n or side < 1:
+                return {'image': img, 'error': f'Custom kernel has {n} values, needs a perfect square'}
+            kernel = np.array(values, dtype=np.uint8).reshape((side, side))
+        except Exception as e:
+            return {'image': img, 'error': f'Invalid custom kernel: {e}'}
+    else:
+        shape = getattr(cv2, shape_str, cv2.MORPH_RECT)
+        kernel = cv2.getStructuringElement(shape, (ksize, ksize))
     result = cv2.erode(img, kernel, iterations=iterations)
     return {'image': result}
 
@@ -513,6 +555,43 @@ def _prepare_mask(mask, target_shape):
     return mask
 
 
+def _match_image_sizes(img, img2, props):
+    """Helper: handle size mismatch between two images based on sizeMismatch property.
+    Returns (img, img2, error_msg).
+    sizeMismatch options:
+      'error'       - return error if sizes differ (default)
+      'resize_img2' - resize img2 to match img
+      'resize_img1' - resize img1 to match img2
+    """
+    if img.shape[:2] == img2.shape[:2]:
+        # Channel mismatch only — fix channels
+        if len(img.shape) != len(img2.shape):
+            if len(img.shape) == 2:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            if len(img2.shape) == 2:
+                img2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2BGR)
+        return img, img2, None
+
+    mode = props.get('sizeMismatch', 'error')
+    h1, w1 = img.shape[:2]
+    h2, w2 = img2.shape[:2]
+
+    if mode == 'resize_img2':
+        img2 = cv2.resize(img2, (w1, h1))
+    elif mode == 'resize_img1':
+        img = cv2.resize(img, (w2, h2))
+    else:  # 'error'
+        return img, img2, f'Size mismatch: image1={w1}x{h1}, image2={w2}x{h2}. Change "Size Mismatch" option to resize.'
+
+    # Fix channel mismatch after resize
+    if len(img.shape) != len(img2.shape):
+        if len(img.shape) == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        if len(img2.shape) == 2:
+            img2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2BGR)
+    return img, img2, None
+
+
 def process_bitwise_and(node, inputs):
     """Bitwise AND of two images with optional mask."""
     img = inputs.get('image')
@@ -521,8 +600,10 @@ def process_bitwise_and(node, inputs):
         return {'image': None, 'error': 'No input image on port 1'}
     if img2 is None:
         return {'image': img, 'error': 'No input image on port 2, passing through port 1'}
-    if img.shape != img2.shape:
-        img2 = cv2.resize(img2, (img.shape[1], img.shape[0]))
+    props = node.get('properties', {})
+    img, img2, err = _match_image_sizes(img, img2, props)
+    if err:
+        return {'image': img, 'error': err}
     mask = _prepare_mask(inputs.get('mask'), img.shape)
     result = cv2.bitwise_and(img, img2, mask=mask)
     return {'image': result}
@@ -536,8 +617,10 @@ def process_bitwise_or(node, inputs):
         return {'image': None, 'error': 'No input image on port 1'}
     if img2 is None:
         return {'image': img, 'error': 'No input image on port 2, passing through port 1'}
-    if img.shape != img2.shape:
-        img2 = cv2.resize(img2, (img.shape[1], img.shape[0]))
+    props = node.get('properties', {})
+    img, img2, err = _match_image_sizes(img, img2, props)
+    if err:
+        return {'image': img, 'error': err}
     mask = _prepare_mask(inputs.get('mask'), img.shape)
     result = cv2.bitwise_or(img, img2, mask=mask)
     return {'image': result}
@@ -565,8 +648,9 @@ def process_add_weighted(node, inputs):
     alpha = float(props.get('alpha', 0.5))
     beta = float(props.get('beta', 0.5))
     gamma = float(props.get('gamma', 0))
-    if img.shape != img2.shape:
-        img2 = cv2.resize(img2, (img.shape[1], img.shape[0]))
+    img, img2, err = _match_image_sizes(img, img2, props)
+    if err:
+        return {'image': img, 'error': err}
     result = cv2.addWeighted(img, alpha, img2, beta, gamma)
     return {'image': result}
 
@@ -942,14 +1026,21 @@ def process_sharpen(node, inputs):
 
 
 def process_filter2d(node, inputs):
-    """Apply custom 2D filter with preset kernels."""
+    """Apply custom 2D filter with preset or custom kernels."""
     img = inputs.get('image')
     if img is None:
         return {'image': None, 'error': 'No input image'}
     props = node.get('properties', {})
     ksize = int(props.get('kernelSize', 3))
+    if ksize < 1:
+        ksize = 3
+    if ksize % 2 == 0:
+        ksize += 1
     preset = props.get('preset', 'sharpen')
-    if preset == 'sharpen':
+    if preset == 'identity':
+        kernel = np.zeros((ksize, ksize), dtype=np.float32)
+        kernel[ksize // 2, ksize // 2] = 1.0
+    elif preset == 'sharpen':
         kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32)
     elif preset == 'edge_detect':
         kernel = np.array([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]], dtype=np.float32)
@@ -959,10 +1050,26 @@ def process_filter2d(node, inputs):
         kernel = np.array([[-1, -1, -1], [-1, 4, -1], [-1, -1, -1]], dtype=np.float32)
     elif preset == 'blur':
         kernel = np.ones((ksize, ksize), dtype=np.float32) / (ksize * ksize)
+    elif preset == 'custom':
+        kernel_str = props.get('kernelData', '')
+        if not kernel_str:
+            return {'image': img, 'error': 'Empty custom kernel data'}
+        try:
+            values = [float(v.strip()) for v in kernel_str.split(',') if v.strip()]
+            n = len(values)
+            side = int(n ** 0.5)
+            if side * side != n:
+                return {'image': img, 'error': f'Kernel data has {n} values, needs a perfect square (e.g. 9=3x3, 25=5x5)'}
+            kernel = np.array(values, dtype=np.float32).reshape((side, side))
+        except Exception as e:
+            return {'image': img, 'error': f'Invalid kernel data: {e}'}
     else:
         kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32)
     result = cv2.filter2D(img, -1, kernel)
-    return {'image': result}
+    info = f'Kernel {kernel.shape[0]}x{kernel.shape[1]}'
+    if preset != 'custom':
+        info += f' ({preset})'
+    return {'image': result, 'info': info}
 
 
 # ---- Edge Nodes ----
@@ -1011,8 +1118,19 @@ def process_structuring_element(node, inputs):
         width = 1
     if height < 1:
         height = 1
-    shape = getattr(cv2, shape_str, cv2.MORPH_RECT)
-    element = cv2.getStructuringElement(shape, (width, height))
+    if shape_str == 'custom':
+        kernel_str = props.get('kernelData', '')
+        try:
+            values = [float(v.strip()) for v in kernel_str.split(',') if v.strip()]
+            n = len(values)
+            if n != width * height:
+                return {'image': None, 'error': f'Custom kernel has {n} values, needs {width}x{height}={width*height}'}
+            element = np.array(values, dtype=np.uint8).reshape((height, width))
+        except Exception as e:
+            return {'image': None, 'error': f'Invalid custom kernel: {e}'}
+    else:
+        shape = getattr(cv2, shape_str, cv2.MORPH_RECT)
+        element = cv2.getStructuringElement(shape, (width, height))
     # Scale to visible image for preview
     display = (element * 255).astype(np.uint8)
     display = cv2.cvtColor(display, cv2.COLOR_GRAY2BGR)
@@ -1072,10 +1190,12 @@ def process_bounding_rect(node, inputs):
     thickness = int(props.get('thickness', 2))
     color = _get_contour_color(props)
     result = img.copy() if len(img.shape) == 3 else cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    coords = []
     for cnt in contours:
         x, y, w, h = cv2.boundingRect(cnt)
         cv2.rectangle(result, (x, y), (x + w, y + h), color, thickness)
-    return {'image': result, 'info': f'{len(contours)} bounding rects'}
+        coords.append([int(x), int(y), int(x + w), int(y + h)])
+    return {'image': result, 'coords': coords, 'info': f'{len(contours)} bounding rects'}
 
 
 def process_min_enclosing_circle(node, inputs):
@@ -1480,6 +1600,92 @@ def process_crop(node, inputs):
     return {'image': result}
 
 
+def process_paste_image(node, inputs):
+    """Paste a smaller overlay image onto a base image at a given position."""
+    base = inputs.get('image')
+    overlay = inputs.get('overlay')
+    if base is None:
+        return {'image': None, 'error': 'No base image'}
+    if overlay is None:
+        return {'image': base.copy(), 'error': 'No overlay image'}
+
+    props = node.get('properties', {})
+    x = int(props.get('x', 0))
+    y = int(props.get('y', 0))
+    mode = props.get('mode', 'overwrite')
+    opacity = float(props.get('opacity', 1.0))
+    opacity = max(0.0, min(1.0, opacity))
+
+    result = base.copy()
+    bh, bw = result.shape[:2]
+    oh, ow = overlay.shape[:2]
+
+    # Clamp paste region to base image bounds
+    x1 = max(0, x)
+    y1 = max(0, y)
+    x2 = min(bw, x + ow)
+    y2 = min(bh, y + oh)
+    if x1 >= x2 or y1 >= y2:
+        return {'image': result, 'error': 'Overlay is completely outside base image'}
+
+    # Source region in overlay (handles negative x, y)
+    sx1 = x1 - x
+    sy1 = y1 - y
+    sx2 = sx1 + (x2 - x1)
+    sy2 = sy1 + (y2 - y1)
+
+    # Ensure both regions are BGR (3-channel)
+    base_roi = result[y1:y2, x1:x2]
+    over_roi = overlay[sy1:sy2, sx1:sx2]
+
+    has_alpha = len(overlay.shape) == 3 and overlay.shape[2] == 4
+
+    if mode == 'overwrite':
+        if has_alpha:
+            over_bgr = over_roi[:, :, :3]
+        else:
+            over_bgr = over_roi if len(over_roi.shape) == 3 else cv2.cvtColor(over_roi, cv2.COLOR_GRAY2BGR)
+        # Match channel count
+        if len(base_roi.shape) == 2 and len(over_bgr.shape) == 3:
+            over_bgr = cv2.cvtColor(over_bgr, cv2.COLOR_BGR2GRAY)
+        elif len(base_roi.shape) == 3 and len(over_bgr.shape) == 2:
+            over_bgr = cv2.cvtColor(over_bgr, cv2.COLOR_GRAY2BGR)
+        result[y1:y2, x1:x2] = over_bgr
+
+    elif mode == 'blend':
+        if has_alpha:
+            over_bgr = over_roi[:, :, :3]
+        else:
+            over_bgr = over_roi if len(over_roi.shape) == 3 else cv2.cvtColor(over_roi, cv2.COLOR_GRAY2BGR)
+        if len(base_roi.shape) == 2 and len(over_bgr.shape) == 3:
+            over_bgr = cv2.cvtColor(over_bgr, cv2.COLOR_BGR2GRAY)
+        elif len(base_roi.shape) == 3 and len(over_bgr.shape) == 2:
+            over_bgr = cv2.cvtColor(over_bgr, cv2.COLOR_GRAY2BGR)
+        blended = cv2.addWeighted(base_roi, 1.0 - opacity, over_bgr, opacity, 0)
+        result[y1:y2, x1:x2] = blended
+
+    elif mode == 'alpha_channel':
+        if has_alpha:
+            alpha = over_roi[:, :, 3].astype(np.float32) / 255.0 * opacity
+            over_bgr = over_roi[:, :, :3]
+        else:
+            alpha = np.full((y2 - y1, x2 - x1), opacity, dtype=np.float32)
+            over_bgr = over_roi if len(over_roi.shape) == 3 else cv2.cvtColor(over_roi, cv2.COLOR_GRAY2BGR)
+        if len(base_roi.shape) == 2 and len(over_bgr.shape) == 3:
+            over_bgr = cv2.cvtColor(over_bgr, cv2.COLOR_BGR2GRAY)
+        elif len(base_roi.shape) == 3 and len(over_bgr.shape) == 2:
+            over_bgr = cv2.cvtColor(over_bgr, cv2.COLOR_GRAY2BGR)
+        if len(base_roi.shape) == 3:
+            alpha_3 = alpha[:, :, np.newaxis]
+        else:
+            alpha_3 = alpha
+        blended = (base_roi.astype(np.float32) * (1.0 - alpha_3) +
+                   over_bgr.astype(np.float32) * alpha_3).astype(np.uint8)
+        result[y1:y2, x1:x2] = blended
+
+    return {'image': result}
+
+
 def process_warp_affine(node, inputs):
     """Apply affine warp with 2x3 matrix."""
     img = inputs.get('image')
@@ -1498,6 +1704,23 @@ def process_warp_affine(node, inputs):
     return {'image': result}
 
 
+def _parse_perspective_points(s, w, h):
+    """Parse 'x0,y0;x1,y1;x2,y2;x3,y3' into np.float32 array. Falls back to image corners."""
+    defaults = np.float32([[0, 0], [w, 0], [w, h], [0, h]])
+    if not s or not isinstance(s, str):
+        return defaults
+    try:
+        pts = []
+        for pair in s.split(';'):
+            parts = pair.strip().split(',')
+            pts.append([float(parts[0]), float(parts[1])])
+        if len(pts) == 4:
+            return np.float32(pts)
+    except Exception:
+        pass
+    return defaults
+
+
 def process_warp_perspective(node, inputs):
     """Apply perspective warp using 4 source and 4 destination points."""
     img = inputs.get('image')
@@ -1505,26 +1728,8 @@ def process_warp_perspective(node, inputs):
         return {'image': None, 'error': 'No input image'}
     props = node.get('properties', {})
     h, w = img.shape[:2]
-    # Source points (default: image corners)
-    sx0 = float(props.get('srcX0', 0))
-    sy0 = float(props.get('srcY0', 0))
-    sx1 = float(props.get('srcX1', w))
-    sy1 = float(props.get('srcY1', 0))
-    sx2 = float(props.get('srcX2', w))
-    sy2 = float(props.get('srcY2', h))
-    sx3 = float(props.get('srcX3', 0))
-    sy3 = float(props.get('srcY3', h))
-    # Destination points (default: image corners)
-    dx0 = float(props.get('dstX0', 0))
-    dy0 = float(props.get('dstY0', 0))
-    dx1 = float(props.get('dstX1', w))
-    dy1 = float(props.get('dstY1', 0))
-    dx2 = float(props.get('dstX2', w))
-    dy2 = float(props.get('dstY2', h))
-    dx3 = float(props.get('dstX3', 0))
-    dy3 = float(props.get('dstY3', h))
-    src_pts = np.float32([[sx0, sy0], [sx1, sy1], [sx2, sy2], [sx3, sy3]])
-    dst_pts = np.float32([[dx0, dy0], [dx1, dy1], [dx2, dy2], [dx3, dy3]])
+    src_pts = _parse_perspective_points(props.get('srcPoints', ''), w, h)
+    dst_pts = _parse_perspective_points(props.get('dstPoints', ''), w, h)
     M = cv2.getPerspectiveTransform(src_pts, dst_pts)
     result = cv2.warpPerspective(img, M, (w, h))
     return {'image': result}
@@ -1599,8 +1804,10 @@ def process_add(node, inputs):
         return {'image': None, 'error': 'No input image on port 1'}
     if img2 is None:
         return {'image': img, 'error': 'No input image on port 2, passing through port 1'}
-    if img.shape != img2.shape:
-        img2 = cv2.resize(img2, (img.shape[1], img.shape[0]))
+    props = node.get('properties', {})
+    img, img2, err = _match_image_sizes(img, img2, props)
+    if err:
+        return {'image': img, 'error': err}
     result = cv2.add(img, img2)
     return {'image': result}
 
@@ -1613,8 +1820,10 @@ def process_subtract(node, inputs):
         return {'image': None, 'error': 'No input image on port 1'}
     if img2 is None:
         return {'image': img, 'error': 'No input image on port 2, passing through port 1'}
-    if img.shape != img2.shape:
-        img2 = cv2.resize(img2, (img.shape[1], img.shape[0]))
+    props = node.get('properties', {})
+    img, img2, err = _match_image_sizes(img, img2, props)
+    if err:
+        return {'image': img, 'error': err}
     result = cv2.subtract(img, img2)
     return {'image': result}
 
@@ -1629,8 +1838,9 @@ def process_multiply(node, inputs):
         return {'image': img, 'error': 'No input image on port 2, passing through port 1'}
     props = node.get('properties', {})
     scale = float(props.get('scale', 1.0))
-    if img.shape != img2.shape:
-        img2 = cv2.resize(img2, (img.shape[1], img.shape[0]))
+    img, img2, err = _match_image_sizes(img, img2, props)
+    if err:
+        return {'image': img, 'error': err}
     result = cv2.multiply(img, img2, scale=scale)
     return {'image': result}
 
@@ -1643,8 +1853,10 @@ def process_absdiff(node, inputs):
         return {'image': None, 'error': 'No input image on port 1'}
     if img2 is None:
         return {'image': img, 'error': 'No input image on port 2, passing through port 1'}
-    if img.shape != img2.shape:
-        img2 = cv2.resize(img2, (img.shape[1], img.shape[0]))
+    props = node.get('properties', {})
+    img, img2, err = _match_image_sizes(img, img2, props)
+    if err:
+        return {'image': img, 'error': err}
     result = cv2.absdiff(img, img2)
     return {'image': result}
 
@@ -1657,8 +1869,10 @@ def process_bitwise_xor(node, inputs):
         return {'image': None, 'error': 'No input image on port 1'}
     if img2 is None:
         return {'image': img, 'error': 'No input image on port 2, passing through port 1'}
-    if img.shape != img2.shape:
-        img2 = cv2.resize(img2, (img.shape[1], img.shape[0]))
+    props = node.get('properties', {})
+    img, img2, err = _match_image_sizes(img, img2, props)
+    if err:
+        return {'image': img, 'error': err}
     mask = _prepare_mask(inputs.get('mask'), img.shape)
     result = cv2.bitwise_xor(img, img2, mask=mask)
     return {'image': result}
@@ -1700,11 +1914,13 @@ def process_haar_cascade(node, inputs):
     detections = classifier.detectMultiScale(gray, scaleFactor=scale_factor, minNeighbors=min_neighbors, minSize=(min_w, min_h))
     result = img.copy() if len(img.shape) == 3 else cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     count = 0
+    coords = []
     if len(detections) > 0:
         count = len(detections)
         for (x, y, w, h) in detections:
             cv2.rectangle(result, (x, y), (x + w, y + h), (0, 255, 0), 2)
-    return {'image': result, 'info': f'Detected {count} objects'}
+            coords.append([int(x), int(y), int(x + w), int(y + h)])
+    return {'image': result, 'coords': coords, 'info': f'Detected {count} objects'}
 
 
 def process_hough_circles(node, inputs):
@@ -1999,6 +2215,35 @@ def process_val_list(node, inputs):
         return {'value': result, 'info': f'list[{start}:{stop}:{step}] = {result[:5]}{"..." if len(result) > 5 else ""}'}
 
 
+def process_val_coords(node, inputs):
+    """Output a coordinate list [[x1,y1,x2,y2], ...] from manual input."""
+    props = node.get('properties', {})
+    mode = props.get('mode', 'single')
+    if mode == 'single':
+        x1 = int(props.get('x1', 0))
+        y1 = int(props.get('y1', 0))
+        x2 = int(props.get('x2', 100))
+        y2 = int(props.get('y2', 100))
+        coords = [[x1, y1, x2, y2]]
+        return {'coords': coords, 'info': f'[{x1},{y1},{x2},{y2}]'}
+    else:  # multi
+        text = props.get('coordsList', '')
+        coords = []
+        for line in text.strip().split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                parts = [int(v.strip()) for v in line.split(',')]
+                if len(parts) >= 4:
+                    coords.append(parts[:4])
+            except ValueError:
+                continue
+        if not coords:
+            return {'coords': [], 'error': 'No valid coordinates parsed'}
+        return {'coords': coords, 'info': f'{len(coords)} coords'}
+
+
 def process_image_extract(node, inputs):
     """Extract a region from an image using coordinates [x1,y1,x2,y2]."""
     img = inputs.get('image')
@@ -2108,6 +2353,7 @@ NODE_PROCESSORS = {
     # Transform
     'flip': process_flip,
     'crop': process_crop,
+    'paste_image': process_paste_image,
     'warp_affine': process_warp_affine,
     'warp_perspective': process_warp_perspective,
     'remap': process_remap,
@@ -2135,6 +2381,7 @@ NODE_PROCESSORS = {
     'val_scalar': process_val_scalar,
     'val_math': process_val_math,
     'val_list': process_val_list,
+    'val_coords': process_val_coords,
     # Detection (extra)
     'image_extract': process_image_extract,
 }
@@ -2282,6 +2529,114 @@ def download_file(filename):
     if not os.path.exists(filepath):
         return jsonify({'error': 'File not found'}), 404
     return send_from_directory(g.session.work_folder, filename, as_attachment=True)
+
+
+@app.route('/api/save_project', methods=['POST'])
+def save_project():
+    """Save flow + images as a ZIP file.
+    Receives flow JSON, packages it with all referenced images into a ZIP.
+    ZIP structure:
+      flow.json
+      images/<imageId>.png
+    """
+    try:
+        flow_data = request.get_json()
+        if not flow_data:
+            return jsonify({'error': 'No flow data provided'}), 400
+
+        # Collect all imageIds from nodes
+        image_ids = set()
+        nodes = flow_data.get('nodes', [])
+        for node in nodes:
+            props = node.get('properties', {})
+            img_id = props.get('imageId')
+            if img_id:
+                image_ids.add(img_id)
+
+        # Build ZIP in memory
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # Write flow.json
+            zf.writestr('flow.json', json.dumps(flow_data, indent=2, ensure_ascii=False))
+
+            # Write images
+            for img_id in image_ids:
+                img = g.session.image_store.get(img_id)
+                if img is not None:
+                    success, buffer = cv2.imencode('.png', img)
+                    if success:
+                        zf.writestr(f'images/{img_id}.png', buffer.tobytes())
+
+        zip_buffer.seek(0)
+        resp = make_response(zip_buffer.read())
+        resp.headers['Content-Type'] = 'application/zip'
+        resp.headers['Content-Disposition'] = 'attachment; filename="nodeopencv-project.zip"'
+        return resp
+
+    except Exception as e:
+        return jsonify({'error': f'Save project failed: {str(e)}'}), 500
+
+
+@app.route('/api/load_project', methods=['POST'])
+def load_project():
+    """Load flow + images from a ZIP file.
+    Extracts flow.json and images, restores images to session image_store.
+    Returns flow data + image previews for client-side restoration.
+    """
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file uploaded'}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+
+        zip_data = file.read()
+        zip_buffer = io.BytesIO(zip_data)
+
+        if not zipfile.is_zipfile(zip_buffer):
+            return jsonify({'error': 'Invalid ZIP file'}), 400
+
+        zip_buffer.seek(0)
+        flow_data = None
+        image_previews = {}
+
+        with zipfile.ZipFile(zip_buffer, 'r') as zf:
+            # Read flow.json
+            if 'flow.json' not in zf.namelist():
+                return jsonify({'error': 'flow.json not found in ZIP'}), 400
+            flow_json = zf.read('flow.json')
+            flow_data = json.loads(flow_json)
+
+            # Read images
+            for name in zf.namelist():
+                if name.startswith('images/') and name != 'images/':
+                    img_data = zf.read(name)
+                    img_array = np.frombuffer(img_data, dtype=np.uint8)
+                    img = cv2.imdecode(img_array, cv2.IMREAD_UNCHANGED)
+                    if img is not None:
+                        # Extract imageId from filename (images/abc12345.png → abc12345)
+                        img_id = os.path.splitext(os.path.basename(name))[0]
+                        # Handle BGRA → BGR if needed (PNG with alpha)
+                        if len(img.shape) == 3 and img.shape[2] == 4:
+                            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+                        # Store in session
+                        g.session.image_store[img_id] = img
+                        # Also save to upload folder for consistency
+                        save_path = os.path.join(g.session.upload_folder, f'{img_id}.png')
+                        cv2.imwrite(save_path, img)
+                        # Generate preview
+                        image_previews[img_id] = {
+                            'preview': encode_image_jpeg(img),
+                            'shape': list(img.shape),
+                        }
+
+        return jsonify({
+            'flow': flow_data,
+            'images': image_previews,
+        })
+
+    except Exception as e:
+        return jsonify({'error': f'Load project failed: {str(e)}'}), 500
 
 
 @app.route('/api/stop_video_loop', methods=['POST'])
@@ -2680,7 +3035,7 @@ def generate_python_code(nodes, connections):
                 src_node = node_map.get(src_id)
                 src_type = src_node.get('type', '') if src_node else ''
                 # Multi-output nodes
-                if src_type in ('control_if', 'control_switch', 'split_channels', 'template_match', 'find_contours'):
+                if src_type in ('control_if', 'control_switch', 'split_channels', 'template_match', 'find_contours', 'haar_cascade', 'bounding_rect'):
                     return var_name(src_id, '_' + src_port)
                 else:
                     return var_name(src_id)
@@ -2803,25 +3158,39 @@ def generate_python_code(nodes, connections):
             sh = props.get('shape', 'MORPH_RECT')
             it = max(1, int(props.get('iterations', 1)))
             lines.append(f'# Morphology Ex')
-            lines.append(f'_kernel = cv2.getStructuringElement(cv2.{sh}, ({k}, {k}))')
+            if sh == 'custom':
+                kd = props.get('kernelData', ','.join(['1'] * (k * k)))
+                lines.append(f'_kernel = np.array([{kd}], dtype=np.uint8).reshape(({k}, {k}))')
+            else:
+                lines.append(f'_kernel = cv2.getStructuringElement(cv2.{sh}, ({k}, {k}))')
             lines.append(f'{out} = cv2.morphologyEx({src}, cv2.{op}, _kernel, iterations={it})')
             lines.append('')
 
         elif ntype == 'dilate':
             k = int(props.get('ksize', 5))
             if k % 2 == 0: k += 1
+            sh = props.get('shape', 'MORPH_RECT')
             it = max(1, int(props.get('iterations', 1)))
             lines.append(f'# Dilate')
-            lines.append(f'_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, ({k}, {k}))')
+            if sh == 'custom':
+                kd = props.get('kernelData', ','.join(['1'] * (k * k)))
+                lines.append(f'_kernel = np.array([{kd}], dtype=np.uint8).reshape(({k}, {k}))')
+            else:
+                lines.append(f'_kernel = cv2.getStructuringElement(cv2.{sh}, ({k}, {k}))')
             lines.append(f'{out} = cv2.dilate({src}, _kernel, iterations={it})')
             lines.append('')
 
         elif ntype == 'erode':
             k = int(props.get('ksize', 5))
             if k % 2 == 0: k += 1
+            sh = props.get('shape', 'MORPH_RECT')
             it = max(1, int(props.get('iterations', 1)))
             lines.append(f'# Erode')
-            lines.append(f'_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, ({k}, {k}))')
+            if sh == 'custom':
+                kd = props.get('kernelData', ','.join(['1'] * (k * k)))
+                lines.append(f'_kernel = np.array([{kd}], dtype=np.uint8).reshape(({k}, {k}))')
+            else:
+                lines.append(f'_kernel = cv2.getStructuringElement(cv2.{sh}, ({k}, {k}))')
             lines.append(f'{out} = cv2.erode({src}, _kernel, iterations={it})')
             lines.append('')
 
@@ -3174,8 +3543,15 @@ def generate_python_code(nodes, connections):
 
         elif ntype == 'filter2d':
             preset = props.get('preset', 'sharpen')
+            ksize = int(props.get('kernelSize', 3))
             lines.append(f'# Filter2D (preset: {preset})')
-            if preset == 'sharpen':
+            if preset == 'custom':
+                kernel_str = props.get('kernelData', '0,-1,0,-1,5,-1,0,-1,0')
+                values = [float(v.strip()) for v in kernel_str.split(',') if v.strip()]
+                side = int(len(values) ** 0.5) or 3
+                rows = [values[i:i+side] for i in range(0, len(values), side)]
+                lines.append(f'_kernel = np.array({rows}, dtype=np.float32)')
+            elif preset == 'sharpen':
                 lines.append(f'_kernel = np.array([[0,-1,0],[-1,5,-1],[0,-1,0]], dtype=np.float32)')
             elif preset == 'edge_detect':
                 lines.append(f'_kernel = np.array([[-1,-1,-1],[-1,8,-1],[-1,-1,-1]], dtype=np.float32)')
@@ -3183,8 +3559,10 @@ def generate_python_code(nodes, connections):
                 lines.append(f'_kernel = np.array([[-2,-1,0],[-1,1,1],[0,1,2]], dtype=np.float32)')
             elif preset == 'ridge':
                 lines.append(f'_kernel = np.array([[-1,-1,-1],[-1,4,-1],[-1,-1,-1]], dtype=np.float32)')
+            elif preset == 'blur':
+                lines.append(f'_kernel = np.ones(({ksize},{ksize}), dtype=np.float32) / {ksize*ksize}')
             else:
-                lines.append(f'_kernel = np.array([[0,0,0],[0,1,0],[0,0,0]], dtype=np.float32)')
+                lines.append(f'_kernel = np.zeros(({ksize},{ksize}), dtype=np.float32); _kernel[{ksize//2},{ksize//2}] = 1.0')
             lines.append(f'{out} = cv2.filter2D({src}, -1, _kernel)')
             lines.append('')
 
@@ -3211,9 +3589,14 @@ def generate_python_code(nodes, connections):
         # ---- Morphology (new) ----
         elif ntype == 'structuring_element':
             shape = props.get('shape', 'MORPH_RECT')
-            k = int(props.get('ksize', 5))
+            w = int(props.get('width', 5))
+            h = int(props.get('height', 5))
             lines.append(f'# Structuring Element')
-            lines.append(f'_kernel = cv2.getStructuringElement(cv2.{shape}, ({k}, {k}))')
+            if shape == 'custom':
+                kd = props.get('kernelData', ','.join(['1'] * (w * h)))
+                lines.append(f'_kernel = np.array([{kd}], dtype=np.uint8).reshape(({h}, {w}))')
+            else:
+                lines.append(f'_kernel = cv2.getStructuringElement(cv2.{shape}, ({w}, {h}))')
             lines.append(f'{out} = (_kernel * 255).astype(np.uint8)')
             lines.append(f'{out} = cv2.cvtColor({out}, cv2.COLOR_GRAY2BGR)')
             lines.append('')
@@ -3471,21 +3854,60 @@ def generate_python_code(nodes, connections):
             lines.append(f'{out} = {src}[{y}:{y}+{h}, {x}:{x}+{w}].copy()')
             lines.append('')
 
+        elif ntype == 'paste_image':
+            ovr = get_src_var(nid, 'overlay')
+            px = int(props.get('x', 0))
+            py = int(props.get('y', 0))
+            pmode = props.get('mode', 'overwrite')
+            palpha = float(props.get('opacity', 1.0))
+            lines.append(f'# Paste Image')
+            lines.append(f'{out} = {src}.copy()')
+            lines.append(f'_ovr = {ovr}')
+            lines.append(f'_bh, _bw = {out}.shape[:2]')
+            lines.append(f'_oh, _ow = _ovr.shape[:2]')
+            lines.append(f'_x1, _y1 = max(0, {px}), max(0, {py})')
+            lines.append(f'_x2, _y2 = min(_bw, {px}+_ow), min(_bh, {py}+_oh)')
+            lines.append(f'_sx1, _sy1 = _x1-{px}, _y1-{py}')
+            lines.append(f'_sx2, _sy2 = _sx1+(_x2-_x1), _sy1+(_y2-_y1)')
+            if pmode == 'overwrite':
+                lines.append(f'if _x1 < _x2 and _y1 < _y2:')
+                lines.append(f'    _patch = _ovr[_sy1:_sy2, _sx1:_sx2]')
+                lines.append(f'    if len(_patch.shape) == 3 and _patch.shape[2] == 4: _patch = _patch[:,:,:3]')
+                lines.append(f'    {out}[_y1:_y2, _x1:_x2] = _patch')
+            elif pmode == 'blend':
+                lines.append(f'if _x1 < _x2 and _y1 < _y2:')
+                lines.append(f'    _patch = _ovr[_sy1:_sy2, _sx1:_sx2]')
+                lines.append(f'    if len(_patch.shape) == 3 and _patch.shape[2] == 4: _patch = _patch[:,:,:3]')
+                lines.append(f'    {out}[_y1:_y2, _x1:_x2] = cv2.addWeighted({out}[_y1:_y2, _x1:_x2], {1.0-palpha}, _patch, {palpha}, 0)')
+            else:  # alpha_channel
+                lines.append(f'if _x1 < _x2 and _y1 < _y2:')
+                lines.append(f'    _patch = _ovr[_sy1:_sy2, _sx1:_sx2]')
+                lines.append(f'    if len(_patch.shape) == 3 and _patch.shape[2] == 4:')
+                lines.append(f'        _a = (_patch[:,:,3].astype(np.float32)/255.0*{palpha})[:,:,np.newaxis]')
+                lines.append(f'        {out}[_y1:_y2, _x1:_x2] = ({out}[_y1:_y2, _x1:_x2].astype(np.float32)*(1-_a) + _patch[:,:,:3].astype(np.float32)*_a).astype(np.uint8)')
+                lines.append(f'    else:')
+                lines.append(f'        {out}[_y1:_y2, _x1:_x2] = cv2.addWeighted({out}[_y1:_y2, _x1:_x2], {1.0-palpha}, _patch, {palpha}, 0)')
+            lines.append('')
+
         elif ntype == 'warp_affine':
+            m00 = float(props.get('m00', 1)); m01 = float(props.get('m01', 0)); m02 = float(props.get('m02', 0))
+            m10 = float(props.get('m10', 0)); m11 = float(props.get('m11', 1)); m12 = float(props.get('m12', 0))
             lines.append(f'# Warp Affine')
             lines.append(f'_h, _w = {src}.shape[:2]')
-            lines.append(f'_pts1 = np.float32([[0,0],[_w,0],[0,_h]])')
-            lines.append(f'_pts2 = np.float32([[0,0],[_w,0],[int(_w*0.15),_h]])')
-            lines.append(f'_M = cv2.getAffineTransform(_pts1, _pts2)')
+            lines.append(f'_M = np.float32([[{m00},{m01},{m02}],[{m10},{m11},{m12}]])')
             lines.append(f'{out} = cv2.warpAffine({src}, _M, (_w, _h))')
             lines.append('')
 
         elif ntype == 'warp_perspective':
+            src_str = props.get('srcPoints', '0,0;300,0;300,300;0,300')
+            dst_str = props.get('dstPoints', '0,0;300,0;300,300;0,300')
+            src_pts = [[float(x) for x in p.split(',')] for p in src_str.split(';')]
+            dst_pts = [[float(x) for x in p.split(',')] for p in dst_str.split(';')]
             lines.append(f'# Warp Perspective')
             lines.append(f'_h, _w = {src}.shape[:2]')
-            lines.append(f'_pts1 = np.float32([[0,0],[_w,0],[0,_h],[_w,_h]])')
-            lines.append(f'_pts2 = np.float32([[int(_w*0.1),int(_h*0.1)],[int(_w*0.9),0],[int(_w*0.05),_h],[int(_w*0.95),int(_h*0.9)]])')
-            lines.append(f'_M = cv2.getPerspectiveTransform(_pts1, _pts2)')
+            lines.append(f'_src_pts = np.float32({src_pts})')
+            lines.append(f'_dst_pts = np.float32({dst_pts})')
+            lines.append(f'_M = cv2.getPerspectiveTransform(_src_pts, _dst_pts)')
             lines.append(f'{out} = cv2.warpPerspective({src}, _M, (_w, _h))')
             lines.append('')
 
@@ -3558,17 +3980,29 @@ def generate_python_code(nodes, connections):
 
         # ---- Detection (new) ----
         elif ntype == 'haar_cascade':
-            cascade = props.get('cascade', 'haarcascade_frontalface_default')
+            cascade_type = props.get('cascadeType', 'face')
+            cascade_map = {
+                'face': 'haarcascade_frontalface_default', 'eye': 'haarcascade_eye',
+                'smile': 'haarcascade_smile', 'body': 'haarcascade_fullbody',
+                'cat_face': 'haarcascade_frontalcatface',
+            }
+            cascade_name = cascade_map.get(cascade_type, cascade_type)
             scale = float(props.get('scaleFactor', 1.1))
             min_n = int(props.get('minNeighbors', 5))
+            min_w = int(props.get('minWidth', 30))
+            min_h = int(props.get('minHeight', 30))
+            out_img = var_name(nid, '_image')
+            out_coords = var_name(nid, '_coords')
             lines.append(f'# Haar Cascade')
-            lines.append(f'_cascade_path = cv2.data.haarcascades + "{cascade}.xml"')
+            lines.append(f'_cascade_path = cv2.data.haarcascades + "{cascade_name}.xml"')
             lines.append(f'_cascade = cv2.CascadeClassifier(_cascade_path)')
             lines.append(f'_gray = cv2.cvtColor({src}, cv2.COLOR_BGR2GRAY) if len({src}.shape) == 3 else {src}')
-            lines.append(f'_rects = _cascade.detectMultiScale(_gray, scaleFactor={scale}, minNeighbors={min_n})')
-            lines.append(f'{out} = {src}.copy() if len({src}.shape) == 3 else cv2.cvtColor({src}, cv2.COLOR_GRAY2BGR)')
+            lines.append(f'_rects = _cascade.detectMultiScale(_gray, scaleFactor={scale}, minNeighbors={min_n}, minSize=({min_w}, {min_h}))')
+            lines.append(f'{out_img} = {src}.copy() if len({src}.shape) == 3 else cv2.cvtColor({src}, cv2.COLOR_GRAY2BGR)')
+            lines.append(f'{out_coords} = []')
             lines.append(f'for (_x, _y, _w, _h) in _rects:')
-            lines.append(f'    cv2.rectangle({out}, (_x, _y), (_x+_w, _y+_h), (0, 255, 0), 2)')
+            lines.append(f'    cv2.rectangle({out_img}, (_x, _y), (_x+_w, _y+_h), (0, 255, 0), 2)')
+            lines.append(f'    {out_coords}.append([int(_x), int(_y), int(_x+_w), int(_y+_h)])')
             lines.append('')
 
         elif ntype == 'hough_circles':
@@ -3722,6 +4156,34 @@ def generate_python_code(nodes, connections):
                 step_str = '' if step == 1 else f':{step}'
                 lines.append(f'# List Slice')
                 lines.append(f'{out} = {src_list}[{start}:{stop_str}{step_str}]')
+            lines.append('')
+
+        elif ntype == 'val_coords':
+            mode = props.get('mode', 'single')
+            if mode == 'single':
+                x1 = int(props.get('x1', 0))
+                y1 = int(props.get('y1', 0))
+                x2 = int(props.get('x2', 100))
+                y2 = int(props.get('y2', 100))
+                lines.append(f'# Coords')
+                lines.append(f'{out} = [[{x1}, {y1}, {x2}, {y2}]]')
+            else:
+                text = props.get('coordsList', '')
+                coord_list = []
+                for line in text.strip().split('\n'):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split(',')
+                    if len(parts) >= 4:
+                        coord_list.append([p.strip() for p in parts[:4]])
+                if coord_list:
+                    formatted = ', '.join([f'[{",".join(c)}]' for c in coord_list])
+                    lines.append(f'# Coords (multi)')
+                    lines.append(f'{out} = [{formatted}]')
+                else:
+                    lines.append(f'# Coords (empty)')
+                    lines.append(f'{out} = []')
             lines.append('')
 
         elif ntype == 'image_extract':

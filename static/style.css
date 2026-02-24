@@ -955,3 +955,110 @@ html, body {
     background: #313244;
     border-radius: 4px;
 }
+
+/* ===== Matrix / Kernel Grid ===== */
+.matrix-grid {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 4px;
+}
+.matrix-grid td {
+    padding: 2px;
+}
+.matrix-grid input {
+    width: 100%;
+    text-align: center;
+    padding: 4px 2px;
+    font-size: 12px;
+    background: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 3px;
+    font-family: 'Consolas', monospace;
+}
+.matrix-grid input:focus {
+    border-color: #89b4fa;
+    outline: none;
+}
+.matrix-grid input:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+.matrix-labels {
+    display: flex;
+    justify-content: space-around;
+    font-size: 9px;
+    color: #585b70;
+    margin-top: 2px;
+}
+
+/* ===== Perspective Points Table ===== */
+.points-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 4px;
+}
+.points-table th {
+    font-size: 10px;
+    color: #6c7086;
+    font-weight: normal;
+    padding: 2px 4px;
+    text-align: center;
+}
+.points-table td {
+    padding: 2px;
+}
+.points-table input {
+    width: 100%;
+    text-align: center;
+    padding: 3px 2px;
+    font-size: 12px;
+    background: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 3px;
+    font-family: 'Consolas', monospace;
+}
+.points-table input:focus {
+    border-color: #89b4fa;
+    outline: none;
+}
+.point-badge {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 20px;
+    font-size: 9px;
+    font-weight: bold;
+    color: white;
+}
+.point-src { background: #89b4fa; }
+.point-dst { background: #f38ba8; }
+
+.pick-btn {
+    cursor: pointer;
+    border-radius: 3px;
+    border: none;
+    font-weight: 600;
+}
+.pick-btn:hover {
+    opacity: 0.85;
+}
+
+/* ===== Preview Point Overlay ===== */
+.preview-canvas-wrap {
+    position: relative;
+    display: inline-block;
+}
+.preview-point-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+.preview-point-canvas.picking {
+    pointer-events: auto;
+    cursor: crosshair;
+}
