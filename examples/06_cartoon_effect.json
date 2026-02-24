@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 300, "label": "", "properties": {"filepath": ""}},
+    {"id": "node_2", "type": "bilateral_filter", "x": 350, "y": 150, "label": "", "properties": {"d": 9, "sigmaColor": 75, "sigmaSpace": 75}},
+    {"id": "node_3", "type": "cvt_color", "x": 350, "y": 450, "label": "", "properties": {"code": "COLOR_BGR2GRAY"}},
+    {"id": "node_4", "type": "median_blur", "x": 600, "y": 450, "label": "", "properties": {"ksize": 7}},
+    {"id": "node_5", "type": "adaptive_threshold", "x": 850, "y": 450, "label": "", "properties": {"maxval": 255, "adaptiveMethod": "ADAPTIVE_THRESH_MEAN_C", "thresholdType": "THRESH_BINARY", "blockSize": 9, "C": 2}},
+    {"id": "node_6", "type": "merge_channels", "x": 1100, "y": 450, "label": "", "properties": {}},
+    {"id": "node_7", "type": "bitwise_and", "x": 1350, "y": 300, "label": "", "properties": {}},
+    {"id": "node_8", "type": "image_show", "x": 1600, "y": 300, "label": "", "properties": {"windowName": "Cartoon Effect"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_4", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"},
+    {"sourceNode": "node_5", "sourcePort": "image", "targetNode": "node_6", "targetPort": "ch0"},
+    {"sourceNode": "node_5", "sourcePort": "image", "targetNode": "node_6", "targetPort": "ch1"},
+    {"sourceNode": "node_5", "sourcePort": "image", "targetNode": "node_6", "targetPort": "ch2"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_7", "targetPort": "image"},
+    {"sourceNode": "node_6", "sourcePort": "image", "targetNode": "node_7", "targetPort": "image2"},
+    {"sourceNode": "node_7", "sourcePort": "image", "targetNode": "node_8", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 9
+}

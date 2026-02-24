@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 250, "label": "", "properties": {"filepath": ""}},
+    {"id": "node_2", "type": "histogram_eq", "x": 350, "y": 150, "label": "", "properties": {"useCLAHE": true, "clipLimit": 2.0, "tileGridSize": 8}},
+    {"id": "node_3", "type": "image_show", "x": 650, "y": 150, "label": "CLAHE Result", "properties": {"windowName": "CLAHE Applied"}},
+    {"id": "node_4", "type": "calc_histogram", "x": 350, "y": 400, "label": "", "properties": {"histSize": 256, "normalize": true}},
+    {"id": "node_5", "type": "image_show", "x": 650, "y": 400, "label": "Original Hist", "properties": {"windowName": "Original Histogram"}},
+    {"id": "node_6", "type": "calc_histogram", "x": 950, "y": 150, "label": "", "properties": {"histSize": 256, "normalize": true}},
+    {"id": "node_7", "type": "image_show", "x": 1250, "y": 150, "label": "CLAHE Hist", "properties": {"windowName": "CLAHE Histogram"}},
+    {"id": "node_8", "type": "image_show", "x": 350, "y": 550, "label": "Original Image", "properties": {"windowName": "Original"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_4", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_6", "targetPort": "image"},
+    {"sourceNode": "node_6", "sourcePort": "image", "targetNode": "node_7", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_8", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 9
+}

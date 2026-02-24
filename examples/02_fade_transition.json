@@ -1,0 +1,109 @@
+{
+  "version": 2,
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "image_read",
+      "x": 50,
+      "y": 100,
+      "label": "Image A",
+      "properties": {
+        "filepath": ""
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "image_read",
+      "x": 50,
+      "y": 400,
+      "label": "Image B",
+      "properties": {
+        "filepath": ""
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "resize",
+      "x": 300,
+      "y": 100,
+      "properties": {
+        "width": 640,
+        "height": 480,
+        "fx": 0,
+        "fy": 0,
+        "interpolation": "INTER_LINEAR"
+      }
+    },
+    {
+      "id": "node_4",
+      "type": "resize",
+      "x": 300,
+      "y": 400,
+      "properties": {
+        "width": 640,
+        "height": 480,
+        "fx": 0,
+        "fy": 0,
+        "interpolation": "INTER_LINEAR"
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "add_weighted",
+      "x": 580,
+      "y": 250,
+      "properties": {
+        "alpha": 0.5,
+        "beta": 0.5,
+        "gamma": 0
+      }
+    },
+    {
+      "id": "node_6",
+      "type": "image_show",
+      "x": 830,
+      "y": 250,
+      "properties": {
+        "windowName": "Fade Transition"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "sourceNode": "node_1",
+      "sourcePort": "image",
+      "targetNode": "node_3",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_2",
+      "sourcePort": "image",
+      "targetNode": "node_4",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_3",
+      "sourcePort": "image",
+      "targetNode": "node_5",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_4",
+      "sourcePort": "image",
+      "targetNode": "node_5",
+      "targetPort": "image2"
+    },
+    {
+      "sourceNode": "node_5",
+      "sourcePort": "image",
+      "targetNode": "node_6",
+      "targetPort": "image"
+    }
+  ],
+  "pan": {
+    "x": 0,
+    "y": 0
+  },
+  "zoom": 1,
+  "nextNodeId": 7
+}

@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 200, "properties": {}},
+    {"id": "node_2", "type": "bitwise_not", "x": 300, "y": 200, "label": "Bitwise NOT", "properties": {}},
+    {"id": "node_3", "type": "image_show", "x": 550, "y": 200, "label": "Negative", "properties": {"windowName": "Negative"}},
+    {"id": "node_4", "type": "image_show", "x": 300, "y": 400, "label": "Original", "properties": {"windowName": "Original"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 5
+}

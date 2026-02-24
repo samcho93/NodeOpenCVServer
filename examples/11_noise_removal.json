@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 250, "properties": {}},
+    {"id": "node_2", "type": "gaussian_blur", "x": 350, "y": 80, "label": "Gaussian Blur", "properties": {"ksize": 5}},
+    {"id": "node_3", "type": "median_blur", "x": 350, "y": 250, "label": "Median Blur", "properties": {"ksize": 5}},
+    {"id": "node_4", "type": "bilateral_filter", "x": 350, "y": 420, "label": "Bilateral Filter", "properties": {"d": 9, "sigmaColor": 75, "sigmaSpace": 75}},
+    {"id": "node_5", "type": "image_show", "x": 650, "y": 80, "label": "Gaussian", "properties": {"windowName": "Gaussian"}},
+    {"id": "node_6", "type": "image_show", "x": 650, "y": 250, "label": "Median", "properties": {"windowName": "Median"}},
+    {"id": "node_7", "type": "image_show", "x": 650, "y": 420, "label": "Bilateral", "properties": {"windowName": "Bilateral"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_6", "targetPort": "image"},
+    {"sourceNode": "node_4", "sourcePort": "image", "targetNode": "node_7", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 8
+}

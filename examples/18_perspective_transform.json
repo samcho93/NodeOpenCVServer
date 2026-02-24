@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 200, "properties": {}},
+    {"id": "node_2", "type": "warp_perspective", "x": 400, "y": 200, "label": "Perspective Transform", "properties": {"srcX1": 56, "srcY1": 65, "srcX2": 368, "srcY2": 52, "srcX3": 28, "srcY3": 387, "srcX4": 389, "srcY4": 390, "dstX1": 0, "dstY1": 0, "dstX2": 400, "dstY2": 0, "dstX3": 0, "dstY3": 400, "dstX4": 400, "dstY4": 400}},
+    {"id": "node_3", "type": "image_show", "x": 750, "y": 200, "label": "Perspective Corrected", "properties": {"windowName": "Perspective Corrected"}},
+    {"id": "node_4", "type": "image_show", "x": 400, "y": 400, "label": "Original", "properties": {"windowName": "Original"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 5
+}

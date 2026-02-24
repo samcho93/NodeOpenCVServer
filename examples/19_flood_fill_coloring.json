@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 200, "properties": {}},
+    {"id": "node_2", "type": "flood_fill", "x": 350, "y": 100, "label": "Fill Red", "properties": {"seedX": 100, "seedY": 100, "colorR": 255, "colorG": 0, "colorB": 0, "loDiff": 30, "upDiff": 30}},
+    {"id": "node_3", "type": "flood_fill", "x": 650, "y": 100, "label": "Fill Green", "properties": {"seedX": 200, "seedY": 200, "colorR": 0, "colorG": 255, "colorB": 0, "loDiff": 30, "upDiff": 30}},
+    {"id": "node_4", "type": "flood_fill", "x": 950, "y": 100, "label": "Fill Blue", "properties": {"seedX": 300, "seedY": 150, "colorR": 0, "colorG": 0, "colorB": 255, "loDiff": 30, "upDiff": 30}},
+    {"id": "node_5", "type": "image_show", "x": 1250, "y": 200, "label": "Flood Fill Result", "properties": {"windowName": "Flood Fill Result"}},
+    {"id": "node_6", "type": "image_show", "x": 350, "y": 400, "label": "Original", "properties": {"windowName": "Original"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_4", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_6", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 7
+}

@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 200, "properties": {}},
+    {"id": "node_2", "type": "cvt_color", "x": 280, "y": 200, "label": "Grayscale", "properties": {"code": "COLOR_BGR2GRAY"}},
+    {"id": "node_3", "type": "gaussian_blur", "x": 510, "y": 200, "label": "Gaussian Blur", "properties": {"ksize": 5}},
+    {"id": "node_4", "type": "canny", "x": 740, "y": 200, "label": "Canny Edge", "properties": {"threshold1": 50, "threshold2": 150}},
+    {"id": "node_5", "type": "hough_lines", "x": 970, "y": 200, "label": "Hough Lines", "properties": {"rho": 1, "theta_divisor": 180, "threshold": 100}},
+    {"id": "node_6", "type": "image_show", "x": 1200, "y": 200, "label": "Hough Lines", "properties": {"windowName": "Hough Lines"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_4", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"},
+    {"sourceNode": "node_5", "sourcePort": "image", "targetNode": "node_6", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 7
+}

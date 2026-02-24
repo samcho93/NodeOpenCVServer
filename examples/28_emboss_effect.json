@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 200, "properties": {"filepath": ""}},
+    {"id": "node_2", "type": "cvt_color", "x": 300, "y": 200, "properties": {"code": "COLOR_BGR2GRAY"}},
+    {"id": "node_3", "type": "filter2d", "x": 550, "y": 200, "properties": {"kernelSize": 3, "preset": "emboss"}},
+    {"id": "node_4", "type": "image_show", "x": 800, "y": 200, "properties": {"windowName": "Emboss Effect"}},
+    {"id": "node_5", "type": "image_show", "x": 300, "y": 400, "properties": {"windowName": "Original"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 6
+}

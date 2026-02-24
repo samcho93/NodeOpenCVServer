@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 150, "label": "Main Image", "properties": {"filepath": ""}},
+    {"id": "node_2", "type": "image_read", "x": 50, "y": 400, "label": "Overlay Image", "properties": {"filepath": ""}},
+    {"id": "node_3", "type": "resize", "x": 300, "y": 150, "label": "Resize Main", "properties": {"width": 640, "height": 480, "fx": 0, "fy": 0, "interpolation": "INTER_LINEAR"}},
+    {"id": "node_4", "type": "resize", "x": 300, "y": 400, "label": "Resize Overlay", "properties": {"width": 640, "height": 480, "fx": 0, "fy": 0, "interpolation": "INTER_LINEAR"}},
+    {"id": "node_5", "type": "add_weighted", "x": 580, "y": 280, "label": "", "properties": {"alpha": 0.7, "beta": 0.3, "gamma": 0}},
+    {"id": "node_6", "type": "draw_text", "x": 830, "y": 280, "label": "", "properties": {"text": "(C) SamOpenCV", "x": 20, "y": 460, "fontScale": 0.8, "colorR": 255, "colorG": 255, "colorB": 255, "thickness": 2}},
+    {"id": "node_7", "type": "image_show", "x": 1080, "y": 280, "label": "", "properties": {"windowName": "Watermark Result"}},
+    {"id": "node_8", "type": "image_show", "x": 580, "y": 80, "label": "Original Preview", "properties": {"windowName": "Original"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"},
+    {"sourceNode": "node_4", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image2"},
+    {"sourceNode": "node_5", "sourcePort": "image", "targetNode": "node_6", "targetPort": "image"},
+    {"sourceNode": "node_6", "sourcePort": "image", "targetNode": "node_7", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_8", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 9
+}

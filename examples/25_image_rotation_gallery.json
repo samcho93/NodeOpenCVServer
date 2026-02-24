@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 250, "properties": {"filepath": ""}},
+    {"id": "node_2", "type": "rotate", "x": 350, "y": 80, "label": "45 deg", "properties": {"angle": 45}},
+    {"id": "node_3", "type": "rotate", "x": 350, "y": 250, "label": "90 deg", "properties": {"angle": 90}},
+    {"id": "node_4", "type": "rotate", "x": 350, "y": 420, "label": "180 deg", "properties": {"angle": 180}},
+    {"id": "node_5", "type": "image_show", "x": 650, "y": 80, "properties": {"windowName": "Rotated 45"}},
+    {"id": "node_6", "type": "image_show", "x": 650, "y": 250, "properties": {"windowName": "Rotated 90"}},
+    {"id": "node_7", "type": "image_show", "x": 650, "y": 420, "properties": {"windowName": "Rotated 180"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_6", "targetPort": "image"},
+    {"sourceNode": "node_4", "sourcePort": "image", "targetNode": "node_7", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 8
+}

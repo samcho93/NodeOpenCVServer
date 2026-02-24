@@ -1,0 +1,155 @@
+{
+  "version": 2,
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "video_read",
+      "x": 50,
+      "y": 100,
+      "label": "Frame T",
+      "properties": {
+        "filepath": "",
+        "mode": "single",
+        "frameIndex": 0
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "video_read",
+      "x": 50,
+      "y": 400,
+      "label": "Frame T+5",
+      "properties": {
+        "filepath": "",
+        "mode": "single",
+        "frameIndex": 5
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "absdiff",
+      "x": 320,
+      "y": 250,
+      "properties": {}
+    },
+    {
+      "id": "node_4",
+      "type": "cvt_color",
+      "x": 550,
+      "y": 250,
+      "properties": {
+        "code": "COLOR_BGR2GRAY"
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "threshold",
+      "x": 780,
+      "y": 250,
+      "properties": {
+        "thresh": 30,
+        "maxval": 255,
+        "type": "THRESH_BINARY"
+      }
+    },
+    {
+      "id": "node_6",
+      "type": "dilate",
+      "x": 1010,
+      "y": 250,
+      "properties": {
+        "ksize": 5,
+        "iterations": 3
+      }
+    },
+    {
+      "id": "node_7",
+      "type": "find_contours",
+      "x": 1240,
+      "y": 250,
+      "properties": {
+        "mode": "RETR_EXTERNAL",
+        "method": "CHAIN_APPROX_SIMPLE"
+      }
+    },
+    {
+      "id": "node_8",
+      "type": "bounding_rect",
+      "x": 1470,
+      "y": 250,
+      "properties": {
+        "mode": "RETR_EXTERNAL",
+        "method": "CHAIN_APPROX_SIMPLE",
+        "thickness": 2,
+        "colorR": 0,
+        "colorG": 255,
+        "colorB": 0
+      }
+    },
+    {
+      "id": "node_9",
+      "type": "image_show",
+      "x": 1700,
+      "y": 250,
+      "properties": {
+        "windowName": "Motion Detection"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "sourceNode": "node_1",
+      "sourcePort": "image",
+      "targetNode": "node_3",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_2",
+      "sourcePort": "image",
+      "targetNode": "node_3",
+      "targetPort": "image2"
+    },
+    {
+      "sourceNode": "node_3",
+      "sourcePort": "image",
+      "targetNode": "node_4",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_4",
+      "sourcePort": "image",
+      "targetNode": "node_5",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_5",
+      "sourcePort": "image",
+      "targetNode": "node_6",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_6",
+      "sourcePort": "image",
+      "targetNode": "node_7",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_7",
+      "sourcePort": "image",
+      "targetNode": "node_8",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_8",
+      "sourcePort": "image",
+      "targetNode": "node_9",
+      "targetPort": "image"
+    }
+  ],
+  "pan": {
+    "x": 0,
+    "y": 0
+  },
+  "zoom": 1,
+  "nextNodeId": 10
+}

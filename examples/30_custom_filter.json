@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 200, "properties": {"filepath": ""}},
+    {"id": "node_2", "type": "python_script", "x": 400, "y": 200, "properties": {"script": "import cv2\nimport numpy as np\n\n# Pencil sketch effect\ngray = cv2.cvtColor(img_input, cv2.COLOR_BGR2GRAY)\ninv = 255 - gray\nblur = cv2.GaussianBlur(inv, (21,21), 0)\nsketch = cv2.divide(gray, 255-blur, scale=256)\nimg_output = cv2.cvtColor(sketch, cv2.COLOR_GRAY2BGR)"}},
+    {"id": "node_3", "type": "image_show", "x": 750, "y": 200, "properties": {"windowName": "Pencil Sketch"}},
+    {"id": "node_4", "type": "image_show", "x": 400, "y": 400, "properties": {"windowName": "Original"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 5
+}

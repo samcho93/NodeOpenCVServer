@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 300, "properties": {"filepath": ""}},
+    {"id": "node_2", "type": "harris_corner", "x": 350, "y": 80, "properties": {"blockSize": 2, "ksize": 3, "k": 0.04}},
+    {"id": "node_3", "type": "good_features", "x": 350, "y": 250, "properties": {"maxCorners": 100, "qualityLevel": 0.01, "minDistance": 10}},
+    {"id": "node_4", "type": "orb_features", "x": 350, "y": 420, "properties": {"nFeatures": 500}},
+    {"id": "node_5", "type": "fast_features", "x": 350, "y": 590, "properties": {"threshold": 25, "nonmaxSuppression": true}},
+    {"id": "node_6", "type": "image_show", "x": 650, "y": 80, "properties": {"windowName": "Harris"}},
+    {"id": "node_7", "type": "image_show", "x": 650, "y": 250, "properties": {"windowName": "Shi-Tomasi"}},
+    {"id": "node_8", "type": "image_show", "x": 650, "y": 420, "properties": {"windowName": "ORB"}},
+    {"id": "node_9", "type": "image_show", "x": 650, "y": 590, "properties": {"windowName": "FAST"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_6", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_7", "targetPort": "image"},
+    {"sourceNode": "node_4", "sourcePort": "image", "targetNode": "node_8", "targetPort": "image"},
+    {"sourceNode": "node_5", "sourcePort": "image", "targetNode": "node_9", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 10
+}

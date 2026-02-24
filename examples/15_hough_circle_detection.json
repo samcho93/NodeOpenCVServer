@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 200, "properties": {}},
+    {"id": "node_2", "type": "cvt_color", "x": 280, "y": 200, "label": "Grayscale", "properties": {"code": "COLOR_BGR2GRAY"}},
+    {"id": "node_3", "type": "gaussian_blur", "x": 510, "y": 200, "label": "Gaussian Blur", "properties": {"ksize": 9}},
+    {"id": "node_4", "type": "hough_circles", "x": 740, "y": 200, "label": "Hough Circles", "properties": {"dp": 1.2, "minDist": 50, "param1": 100, "param2": 30, "minRadius": 10, "maxRadius": 100}},
+    {"id": "node_5", "type": "image_show", "x": 970, "y": 200, "label": "Hough Circles", "properties": {"windowName": "Hough Circles"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_4", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 6
+}

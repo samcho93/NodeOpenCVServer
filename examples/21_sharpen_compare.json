@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 250, "properties": {"filepath": ""}},
+    {"id": "node_2", "type": "sharpen", "x": 350, "y": 80, "label": "Weak", "properties": {"strength": 0.5}},
+    {"id": "node_3", "type": "sharpen", "x": 350, "y": 250, "label": "Medium", "properties": {"strength": 1.5}},
+    {"id": "node_4", "type": "sharpen", "x": 350, "y": 420, "label": "Strong", "properties": {"strength": 3.0}},
+    {"id": "node_5", "type": "image_show", "x": 650, "y": 80, "properties": {"windowName": "Weak Sharpen"}},
+    {"id": "node_6", "type": "image_show", "x": 650, "y": 250, "properties": {"windowName": "Medium Sharpen"}},
+    {"id": "node_7", "type": "image_show", "x": 650, "y": 420, "properties": {"windowName": "Strong Sharpen"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_6", "targetPort": "image"},
+    {"sourceNode": "node_4", "sourcePort": "image", "targetNode": "node_7", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 8
+}

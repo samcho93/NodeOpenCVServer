@@ -1,0 +1,148 @@
+{
+  "version": 2,
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "video_read",
+      "x": 50,
+      "y": 250,
+      "properties": {
+        "filepath": "",
+        "mode": "loop",
+        "frameIndex": 0
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "cvt_color",
+      "x": 280,
+      "y": 250,
+      "properties": {
+        "code": "COLOR_BGR2HSV"
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "in_range",
+      "x": 510,
+      "y": 250,
+      "properties": {
+        "lowerB": 100,
+        "lowerG": 50,
+        "lowerR": 50,
+        "upperB": 130,
+        "upperG": 255,
+        "upperR": 255
+      }
+    },
+    {
+      "id": "node_4",
+      "type": "morphology",
+      "x": 740,
+      "y": 250,
+      "label": "Open",
+      "properties": {
+        "operation": "MORPH_OPEN",
+        "ksize": 5,
+        "shape": "MORPH_ELLIPSE",
+        "iterations": 2
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "morphology",
+      "x": 970,
+      "y": 250,
+      "label": "Close",
+      "properties": {
+        "operation": "MORPH_CLOSE",
+        "ksize": 5,
+        "shape": "MORPH_ELLIPSE",
+        "iterations": 2
+      }
+    },
+    {
+      "id": "node_6",
+      "type": "find_contours",
+      "x": 1200,
+      "y": 250,
+      "properties": {
+        "mode": "RETR_EXTERNAL",
+        "method": "CHAIN_APPROX_SIMPLE"
+      }
+    },
+    {
+      "id": "node_7",
+      "type": "min_enclosing_circle",
+      "x": 1430,
+      "y": 250,
+      "properties": {
+        "mode": "RETR_EXTERNAL",
+        "method": "CHAIN_APPROX_SIMPLE",
+        "thickness": 2,
+        "colorR": 0,
+        "colorG": 255,
+        "colorB": 255
+      }
+    },
+    {
+      "id": "node_8",
+      "type": "image_show",
+      "x": 1660,
+      "y": 250,
+      "properties": {
+        "windowName": "Color Tracking"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "sourceNode": "node_1",
+      "sourcePort": "image",
+      "targetNode": "node_2",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_2",
+      "sourcePort": "image",
+      "targetNode": "node_3",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_3",
+      "sourcePort": "image",
+      "targetNode": "node_4",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_4",
+      "sourcePort": "image",
+      "targetNode": "node_5",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_5",
+      "sourcePort": "image",
+      "targetNode": "node_6",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_6",
+      "sourcePort": "image",
+      "targetNode": "node_7",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_7",
+      "sourcePort": "image",
+      "targetNode": "node_8",
+      "targetPort": "image"
+    }
+  ],
+  "pan": {
+    "x": 0,
+    "y": 0
+  },
+  "zoom": 1,
+  "nextNodeId": 9
+}

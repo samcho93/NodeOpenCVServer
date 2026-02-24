@@ -1,0 +1,590 @@
+{
+  "version": 2,
+  "nodes": [
+    {
+      "id": "node_4",
+      "type": "image_read",
+      "x": 200,
+      "y": 180,
+      "label": "desert.jpg",
+      "properties": {
+        "filepath": "",
+        "imageId": "92c01203",
+        "filename": "desert.jpg"
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "image_read",
+      "x": 200,
+      "y": 360,
+      "label": "tree.jpg",
+      "properties": {
+        "filepath": "",
+        "imageId": "6837166f",
+        "filename": "tree.jpg"
+      }
+    },
+    {
+      "id": "node_6",
+      "type": "resize",
+      "x": 460,
+      "y": 180,
+      "label": "",
+      "properties": {
+        "width": 640,
+        "height": 480,
+        "fx": 0.5,
+        "fy": 0.5,
+        "interpolation": "INTER_LINEAR"
+      }
+    },
+    {
+      "id": "node_7",
+      "type": "resize",
+      "x": 460,
+      "y": 360,
+      "label": "",
+      "properties": {
+        "width": 640,
+        "height": 480,
+        "fx": 0.5,
+        "fy": 0.5,
+        "interpolation": "INTER_LINEAR"
+      }
+    },
+    {
+      "id": "node_9",
+      "type": "add_weighted",
+      "x": 840,
+      "y": 340,
+      "label": "",
+      "properties": {
+        "alpha": 0.8,
+        "beta": 0.2,
+        "gamma": 0
+      }
+    },
+    {
+      "id": "node_8",
+      "type": "add",
+      "x": 840,
+      "y": 180,
+      "label": "",
+      "properties": {}
+    },
+    {
+      "id": "node_11",
+      "type": "split_channels",
+      "x": 460,
+      "y": 680,
+      "label": "",
+      "properties": {}
+    },
+    {
+      "id": "node_12",
+      "type": "merge_channels",
+      "x": 840,
+      "y": 680,
+      "label": "",
+      "properties": {}
+    },
+    {
+      "id": "node_13",
+      "type": "image_show",
+      "x": 1100,
+      "y": 200,
+      "label": "",
+      "properties": {
+        "windowName": "Output"
+      }
+    },
+    {
+      "id": "node_14",
+      "type": "image_show",
+      "x": 1100,
+      "y": 360,
+      "label": "",
+      "properties": {
+        "windowName": "Output"
+      }
+    },
+    {
+      "id": "node_15",
+      "type": "image_show",
+      "x": 1100,
+      "y": 500,
+      "label": "",
+      "properties": {
+        "windowName": "Output"
+      }
+    },
+    {
+      "id": "node_16",
+      "type": "image_show",
+      "x": 1100,
+      "y": 700,
+      "label": "",
+      "properties": {
+        "windowName": "Output"
+      }
+    },
+    {
+      "id": "node_10",
+      "type": "subtract",
+      "x": 840,
+      "y": 500,
+      "label": "",
+      "properties": {}
+    },
+    {
+      "id": "node_19",
+      "type": "cvt_color",
+      "x": 1100,
+      "y": 860,
+      "label": "",
+      "properties": {
+        "code": "COLOR_BGR2GRAY"
+      }
+    },
+    {
+      "id": "node_20",
+      "type": "threshold",
+      "x": 1360,
+      "y": 860,
+      "label": "",
+      "properties": {
+        "thresh": 127,
+        "maxval": 255,
+        "type": "THRESH_BINARY"
+      }
+    },
+    {
+      "id": "node_21",
+      "type": "adaptive_threshold",
+      "x": 1360,
+      "y": 1040,
+      "label": "",
+      "properties": {
+        "maxval": 255,
+        "adaptiveMethod": "ADAPTIVE_THRESH_GAUSSIAN_C",
+        "thresholdType": "THRESH_BINARY",
+        "blockSize": 11,
+        "C": 2
+      }
+    },
+    {
+      "id": "node_22",
+      "type": "image_read",
+      "x": 900,
+      "y": 1180,
+      "label": "0cbf531d56e05f3e1faa7bc65a120dc8.jpg",
+      "properties": {
+        "filepath": "",
+        "imageId": "c5d5afde",
+        "filename": "0cbf531d56e05f3e1faa7bc65a120dc8.jpg"
+      }
+    },
+    {
+      "id": "node_23",
+      "type": "cvt_color",
+      "x": 1160,
+      "y": 1180,
+      "label": "",
+      "properties": {
+        "code": "COLOR_BGR2GRAY"
+      }
+    },
+    {
+      "id": "node_25",
+      "type": "adaptive_threshold",
+      "x": 1440,
+      "y": 1320,
+      "label": "",
+      "properties": {
+        "maxval": 255,
+        "adaptiveMethod": "ADAPTIVE_THRESH_GAUSSIAN_C",
+        "thresholdType": "THRESH_BINARY",
+        "blockSize": 5,
+        "C": 0
+      }
+    },
+    {
+      "id": "node_24",
+      "type": "threshold",
+      "x": 1440,
+      "y": 1180,
+      "label": "",
+      "properties": {
+        "thresh": 90,
+        "maxval": 255,
+        "type": "THRESH_BINARY"
+      }
+    },
+    {
+      "id": "node_26",
+      "type": "image_show",
+      "x": 1680,
+      "y": 1320,
+      "label": "",
+      "properties": {
+        "windowName": "Output"
+      }
+    },
+    {
+      "id": "node_36",
+      "type": "image_read",
+      "x": 860,
+      "y": 1520,
+      "label": "hex.jpg",
+      "properties": {
+        "filepath": "",
+        "imageId": "a3610599",
+        "filename": "hex.jpg"
+      }
+    },
+    {
+      "id": "node_37",
+      "type": "cvt_color",
+      "x": 1080,
+      "y": 1520,
+      "label": "",
+      "properties": {
+        "code": "COLOR_BGR2GRAY"
+      }
+    },
+    {
+      "id": "node_39",
+      "type": "image_read",
+      "x": 860,
+      "y": 1680,
+      "label": "wintry.jpg",
+      "properties": {
+        "filepath": "",
+        "imageId": "f384b95b",
+        "filename": "wintry.jpg"
+      }
+    },
+    {
+      "id": "node_38",
+      "type": "threshold",
+      "x": 1280,
+      "y": 1520,
+      "label": "",
+      "properties": {
+        "thresh": 190,
+        "maxval": 255,
+        "type": "THRESH_BINARY_INV"
+      }
+    },
+    {
+      "id": "node_29",
+      "type": "bitwise_xor",
+      "x": 1580,
+      "y": 1880,
+      "label": "",
+      "properties": {}
+    },
+    {
+      "id": "node_28",
+      "type": "bitwise_or",
+      "x": 1580,
+      "y": 1700,
+      "label": "",
+      "properties": {}
+    },
+    {
+      "id": "node_27",
+      "type": "bitwise_and",
+      "x": 1580,
+      "y": 1520,
+      "label": "",
+      "properties": {}
+    },
+    {
+      "id": "node_40",
+      "type": "cvt_color",
+      "x": 1080,
+      "y": 1920,
+      "label": "",
+      "properties": {
+        "code": "COLOR_BGR2HSV"
+      }
+    },
+    {
+      "id": "node_41",
+      "type": "split_channels",
+      "x": 1300,
+      "y": 2140,
+      "label": "",
+      "properties": {}
+    },
+    {
+      "id": "node_45",
+      "type": "bitwise_not",
+      "x": 1800,
+      "y": 2140,
+      "label": "",
+      "properties": {}
+    },
+    {
+      "id": "node_42",
+      "type": "in_range",
+      "x": 1580,
+      "y": 2140,
+      "label": "",
+      "properties": {
+        "lowerB": 110,
+        "lowerG": 0,
+        "lowerR": 0,
+        "upperB": 149,
+        "upperG": 255,
+        "upperR": 255
+      }
+    },
+    {
+      "id": "node_43",
+      "type": "bitwise_and",
+      "x": 1800,
+      "y": 2340,
+      "label": "",
+      "properties": {}
+    }
+  ],
+  "connections": [
+    {
+      "sourceNode": "node_4",
+      "sourcePort": "image",
+      "targetNode": "node_6",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_5",
+      "sourcePort": "image",
+      "targetNode": "node_7",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_6",
+      "sourcePort": "image",
+      "targetNode": "node_8",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_7",
+      "sourcePort": "image",
+      "targetNode": "node_8",
+      "targetPort": "image2"
+    },
+    {
+      "sourceNode": "node_6",
+      "sourcePort": "image",
+      "targetNode": "node_9",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_7",
+      "sourcePort": "image",
+      "targetNode": "node_9",
+      "targetPort": "image2"
+    },
+    {
+      "sourceNode": "node_6",
+      "sourcePort": "image",
+      "targetNode": "node_10",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_7",
+      "sourcePort": "image",
+      "targetNode": "node_10",
+      "targetPort": "image2"
+    },
+    {
+      "sourceNode": "node_4",
+      "sourcePort": "image",
+      "targetNode": "node_11",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_11",
+      "sourcePort": "ch0",
+      "targetNode": "node_12",
+      "targetPort": "ch2"
+    },
+    {
+      "sourceNode": "node_11",
+      "sourcePort": "ch2",
+      "targetNode": "node_12",
+      "targetPort": "ch0"
+    },
+    {
+      "sourceNode": "node_11",
+      "sourcePort": "ch1",
+      "targetNode": "node_12",
+      "targetPort": "ch1"
+    },
+    {
+      "sourceNode": "node_8",
+      "sourcePort": "image",
+      "targetNode": "node_13",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_9",
+      "sourcePort": "image",
+      "targetNode": "node_14",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_10",
+      "sourcePort": "image",
+      "targetNode": "node_15",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_12",
+      "sourcePort": "image",
+      "targetNode": "node_16",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_12",
+      "sourcePort": "image",
+      "targetNode": "node_19",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_19",
+      "sourcePort": "image",
+      "targetNode": "node_20",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_19",
+      "sourcePort": "image",
+      "targetNode": "node_21",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_22",
+      "sourcePort": "image",
+      "targetNode": "node_23",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_23",
+      "sourcePort": "image",
+      "targetNode": "node_24",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_23",
+      "sourcePort": "image",
+      "targetNode": "node_25",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_25",
+      "sourcePort": "image",
+      "targetNode": "node_26",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_36",
+      "sourcePort": "image",
+      "targetNode": "node_37",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_37",
+      "sourcePort": "image",
+      "targetNode": "node_38",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_38",
+      "sourcePort": "image",
+      "targetNode": "node_28",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_39",
+      "sourcePort": "image",
+      "targetNode": "node_28",
+      "targetPort": "image2"
+    },
+    {
+      "sourceNode": "node_38",
+      "sourcePort": "image",
+      "targetNode": "node_29",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_39",
+      "sourcePort": "image",
+      "targetNode": "node_29",
+      "targetPort": "image2"
+    },
+    {
+      "sourceNode": "node_39",
+      "sourcePort": "image",
+      "targetNode": "node_27",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_38",
+      "sourcePort": "image",
+      "targetNode": "node_27",
+      "targetPort": "mask"
+    },
+    {
+      "sourceNode": "node_39",
+      "sourcePort": "image",
+      "targetNode": "node_27",
+      "targetPort": "image2"
+    },
+    {
+      "sourceNode": "node_39",
+      "sourcePort": "image",
+      "targetNode": "node_40",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_40",
+      "sourcePort": "image",
+      "targetNode": "node_41",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_39",
+      "sourcePort": "image",
+      "targetNode": "node_43",
+      "targetPort": "image2"
+    },
+    {
+      "sourceNode": "node_41",
+      "sourcePort": "ch0",
+      "targetNode": "node_42",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_42",
+      "sourcePort": "image",
+      "targetNode": "node_45",
+      "targetPort": "image"
+    },
+    {
+      "sourceNode": "node_45",
+      "sourcePort": "image",
+      "targetNode": "node_43",
+      "targetPort": "image"
+    }
+  ],
+  "pan": {
+    "x": -706.1855553653229,
+    "y": -1355.6430588931185
+  },
+  "zoom": 0.7625597484987003,
+  "nextNodeId": 46
+}

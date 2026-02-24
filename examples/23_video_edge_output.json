@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "video_read", "x": 50, "y": 200, "properties": {"mode": "loop"}},
+    {"id": "node_2", "type": "cvt_color", "x": 280, "y": 200, "properties": {"code": "COLOR_BGR2GRAY"}},
+    {"id": "node_3", "type": "canny", "x": 510, "y": 200, "properties": {"threshold1": 100, "threshold2": 200}},
+    {"id": "node_4", "type": "image_write", "x": 740, "y": 200, "properties": {"filepath": "output_edges.mp4", "videoOutput": true, "videoCodec": "mp4v", "videoFps": 30}},
+    {"id": "node_5", "type": "image_show", "x": 510, "y": 400, "properties": {"windowName": "Edge Preview"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 6
+}

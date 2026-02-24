@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 100, "label": "Left Image", "properties": {}},
+    {"id": "node_2", "type": "image_read", "x": 50, "y": 400, "label": "Right Image", "properties": {}},
+    {"id": "node_3", "type": "match_features", "x": 400, "y": 250, "label": "Feature Matching", "properties": {"nFeatures": 500, "matchRatio": 0.75}},
+    {"id": "node_4", "type": "image_show", "x": 700, "y": 250, "label": "Feature Matches", "properties": {"windowName": "Feature Matches"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image2"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 5
+}

@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 250, "properties": {"filepath": ""}},
+    {"id": "node_2", "type": "cvt_color", "x": 280, "y": 150, "properties": {"code": "COLOR_BGR2HSV"}},
+    {"id": "node_3", "type": "in_range", "x": 510, "y": 150, "properties": {"lowerB": 0, "lowerG": 100, "lowerR": 100, "upperB": 10, "upperG": 255, "upperR": 255}},
+    {"id": "node_4", "type": "bitwise_and", "x": 740, "y": 250, "properties": {}},
+    {"id": "node_5", "type": "image_show", "x": 990, "y": 250, "properties": {"windowName": "Red Only"}},
+    {"id": "node_6", "type": "image_show", "x": 740, "y": 80, "properties": {"windowName": "Mask"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image2"},
+    {"sourceNode": "node_4", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_6", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 7
+}

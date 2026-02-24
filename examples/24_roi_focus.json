@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "nodes": [
+    {"id": "node_1", "type": "image_read", "x": 50, "y": 200, "properties": {"filepath": ""}},
+    {"id": "node_2", "type": "crop", "x": 300, "y": 200, "properties": {"x": 100, "y": 100, "width": 200, "height": 200}},
+    {"id": "node_3", "type": "gaussian_blur", "x": 550, "y": 100, "properties": {"ksize": 11}},
+    {"id": "node_4", "type": "sharpen", "x": 550, "y": 300, "properties": {"strength": 2.0}},
+    {"id": "node_5", "type": "image_show", "x": 800, "y": 100, "properties": {"windowName": "ROI Blurred"}},
+    {"id": "node_6", "type": "image_show", "x": 800, "y": 300, "properties": {"windowName": "ROI Sharpened"}},
+    {"id": "node_7", "type": "image_show", "x": 550, "y": 450, "properties": {"windowName": "Cropped Region"}}
+  ],
+  "connections": [
+    {"sourceNode": "node_1", "sourcePort": "image", "targetNode": "node_2", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_3", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_4", "targetPort": "image"},
+    {"sourceNode": "node_3", "sourcePort": "image", "targetNode": "node_5", "targetPort": "image"},
+    {"sourceNode": "node_4", "sourcePort": "image", "targetNode": "node_6", "targetPort": "image"},
+    {"sourceNode": "node_2", "sourcePort": "image", "targetNode": "node_7", "targetPort": "image"}
+  ],
+  "pan": {"x": 0, "y": 0},
+  "zoom": 1,
+  "nextNodeId": 8
+}
