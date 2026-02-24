@@ -485,7 +485,7 @@ NODES = [
     {'t':'contour_properties','en':'Contour Properties','kr':'컨투어 속성','cat':'contour','c':'#009688',
      'sig':'cv2.contourArea + cv2.arcLength + cv2.moments','desc':'면적, 둘레, 중심점 등의 속성을 표시합니다.',
      'i':[('image','image')],'o':[('image','image')],'p':[('mode','Mode','select','RETR_EXTERNAL',''),('method','Approx','select','CHAIN_APPROX_SIMPLE',''),('showArea','Area','checkbox','true','면적'),('showPerimeter','Perimeter','checkbox','true','둘레'),('showCenter','Center','checkbox','true','중심')]},
-    # --- Transform (7) ---
+    # --- Transform (8) ---
     {'t':'resize','en':'Resize','kr':'리사이즈','cat':'transform','c':'#00BCD4',
      'sig':'cv2.resize(src, dsize, fx, fy)','desc':'이미지 크기를 변경합니다.',
      'i':[('image','image')],'o':[('image','image')],'p':[('width','Width','number','0','너비'),('height','Height','number','0','높이'),('fx','Scale X','number','0.5','X비율'),('fy','Scale Y','number','0.5','Y비율'),('interpolation','Interp','select','INTER_LINEAR','보간')]},
@@ -507,6 +507,9 @@ NODES = [
     {'t':'remap','en':'Remap','kr':'리맵','cat':'transform','c':'#00BCD4',
      'sig':'cv2.remap(src, map1, map2, interpolation)','desc':'배럴/핀쿠션 왜곡을 보정합니다.',
      'i':[('image','image')],'o':[('image','image')],'p':[('distortionK','K','number','0.5','왜곡계수'),('interpolation','Interp','select','INTER_LINEAR','보간')]},
+    {'t':'paste_image','en':'Paste Image','kr':'이미지 붙여넣기','cat':'transform','c':'#00BCD4',
+     'sig':'Image Paste (overlay at x,y)','desc':'작은 이미지를 큰 이미지 위에 지정 좌표에 덮어씌웁니다. overwrite/blend/alpha 모드.',
+     'i':[('image','image'),('overlay','overlay')],'o':[('image','image')],'p':[('x','X','number','0','X좌표'),('y','Y','number','0','Y좌표'),('mode','Mode','select','overwrite','모드'),('opacity','Opacity','number','1.0','투명도')]},
     # --- Histogram (1) ---
     {'t':'calc_histogram','en':'Calc Histogram','kr':'히스토그램 계산','cat':'histogram','c':'#673AB7',
      'sig':'cv2.calcHist','desc':'이미지 히스토그램을 계산하고 시각화합니다.',
@@ -552,10 +555,10 @@ NODES = [
     {'t':'draw_polylines','en':'Draw Polylines','kr':'다각선 그리기','cat':'drawing','c':'#E91E63',
      'sig':'cv2.polylines(img, [pts], isClosed, color, thickness)','desc':'다각형 또는 다각선을 그립니다.',
      'i':[('image','image')],'o':[('image','image')],'p':[('points','Points','text','10,10;100,50;50,100','좌표'),('isClosed','Closed','checkbox','true','닫힘'),('colorR','R','number','0',''),('colorG','G','number','255',''),('colorB','B','number','0',''),('thickness','Thickness','number','2','')]},
-    # --- Arithmetic (9) ---
+    # --- Arithmetic (9) --- (all two-image ops have sizeMismatch option: error/resize_img1/resize_img2)
     {'t':'add_weighted','en':'Add Weighted','kr':'가중 합성','cat':'arithmetic','c':'#3F51B5',
-     'sig':'cv2.addWeighted(src1, alpha, src2, beta, gamma)','desc':'두 이미지를 가중치로 합성합니다.',
-     'i':[('image','image'),('image2','image2')],'o':[('image','image')],'p':[('alpha','Alpha','number','0.5',''),('beta','Beta','number','0.5',''),('gamma','Gamma','number','0','')]},
+     'sig':'cv2.addWeighted(src1, alpha, src2, beta, gamma)','desc':'두 이미지를 가중치로 합성합니다. 크기 불일치 시 sizeMismatch 옵션 사용.',
+     'i':[('image','image'),('image2','image2')],'o':[('image','image')],'p':[('alpha','Alpha','number','0.5',''),('beta','Beta','number','0.5',''),('gamma','Gamma','number','0',''),('sizeMismatch','Size Mismatch','select','error','크기불일치')]},
     {'t':'bitwise_and','en':'Bitwise AND','kr':'비트 AND','cat':'arithmetic','c':'#3F51B5',
      'sig':'cv2.bitwise_and(src1, src2)','desc':'비트 AND 연산. 마스크 적용에 사용합니다.',
      'i':[('image','image'),('image2','image2')],'o':[('image','image')],'p':[]},
@@ -582,8 +585,8 @@ NODES = [
      'i':[('image','image'),('image2','image2')],'o':[('image','image')],'p':[]},
     # --- Detection (4) ---
     {'t':'haar_cascade','en':'Haar Cascade','kr':'하르 캐스케이드','cat':'detection','c':'#FF5722',
-     'sig':'cv2.CascadeClassifier.detectMultiScale()','desc':'얼굴, 눈, 미소 등을 검출합니다.',
-     'i':[('image','image')],'o':[('image','image')],'p':[('cascadeType','Type','select','face','유형'),('scaleFactor','Scale','number','1.1','스케일'),('minNeighbors','Neighbors','number','5','이웃'),('minWidth','MinW','number','30','최소폭'),('minHeight','MinH','number','30','최소높이')]},
+     'sig':'cv2.CascadeClassifier.detectMultiScale()','desc':'얼굴, 눈, 미소 등을 검출합니다. coords 포트로 좌표 리스트 출력.',
+     'i':[('image','image')],'o':[('image','image'),('coords','coords')],'p':[('cascadeType','Type','select','face','유형'),('scaleFactor','Scale','number','1.1','스케일'),('minNeighbors','Neighbors','number','5','이웃'),('minWidth','MinW','number','30','최소폭'),('minHeight','MinH','number','30','최소높이')]},
     {'t':'hough_circles','en':'Hough Circles','kr':'허프 원','cat':'detection','c':'#FF5722',
      'sig':'cv2.HoughCircles(image, method, dp, minDist, ...)','desc':'허프 변환으로 원을 검출합니다.',
      'i':[('image','image')],'o':[('image','image')],'p':[('dp','dp','number','1.2','역비율'),('minDist','MinDist','number','50','최소간격'),('param1','P1','number','100','캐니'),('param2','P2','number','30','축적기'),('minRadius','MinR','number','0','최소R'),('maxRadius','MaxR','number','0','최대R')]},
@@ -603,7 +606,7 @@ NODES = [
     {'t':'watershed','en':'Watershed','kr':'워터쉐드','cat':'segmentation','c':'#795548',
      'sig':'cv2.watershed(image, markers)','desc':'워터쉐드로 이미지를 영역 분할합니다.',
      'i':[('image','image')],'o':[('image','image')],'p':[('markerSize','Marker K','number','10','커널')]},
-    # --- Value (7) ---
+    # --- Value (8) ---
     {'t':'val_integer','en':'Integer','kr':'정수','cat':'value','c':'#78909C',
      'sig':'Integer Value','desc':'정수 상수를 출력합니다.',
      'i':[],'o':[('value','value')],'p':[('value','Value','number','0','값'),('min','Min','number','0','최소'),('max','Max','number','255','최대')]},
@@ -622,6 +625,9 @@ NODES = [
     {'t':'val_math','en':'Math Operation','kr':'수학 연산','cat':'value','c':'#78909C',
      'sig':'Math Operation','desc':'기본 수학 연산을 수행합니다.',
      'i':[('a','A'),('b','B')],'o':[('value','result')],'p':[('operation','Op','select','add','연산')]},
+    {'t':'val_coords','en':'Val Coords','kr':'좌표 입력','cat':'value','c':'#78909C',
+     'sig':'Val Coords (x1,y1,x2,y2)','desc':'수동 좌표 입력. Image Extract의 coords 포트에 연결합니다. single/multi 모드.',
+     'i':[],'o':[('coords','coords')],'p':[('mode','Mode','select','single','모드'),('x1','X1','number','0',''),('y1','Y1','number','0',''),('x2','X2','number','100',''),('y2','Y2','number','100','')]},
     {'t':'val_list','en':'List Index/Slice','kr':'리스트 인덱싱','cat':'value','c':'#78909C',
      'sig':'List Index/Slice','desc':'리스트에서 인덱싱 또는 슬라이싱합니다.',
      'i':[('list','list')],'o':[('value','result')],'p':[('mode','Mode','select','index','모드'),('index','Index','number','0','인덱스'),('start','Start','number','0','시작'),('stop','Stop','number','-1','끝'),('step','Step','number','1','스텝')]},
@@ -1274,6 +1280,63 @@ EXAMPLES = [
          '연필로 스케치한 듯한 예술적 효과가 생성됩니다.'],
      'file':'30_custom_filter.json',
      'extra':'GaussianBlur 커널 크기를 변경하면 스케치 선의 굵기가 달라집니다.'},
+
+    # === New Feature Tutorials ===
+    {'n':31, 'title':'이미지 오버레이 (Paste Image)', 'difficulty':'★★',
+     'goal':'Crop으로 추출한 이미지를 다른 이미지 위에 지정 좌표에 덮어씌웁니다.',
+     'concepts':['이미지 합성', 'overlay', 'blend', 'alpha channel', '좌표 지정'],
+     'pipe':[('Image Read','#4CAF50','base'), ('Paste Image','#00BCD4','x,y'), ('Show','#4CAF50','')],
+     'steps':[
+         '배경용 Image Read와 오버레이용 Image Read 두 개를 추가합니다.',
+         'Paste Image 노드를 추가하고, 배경 이미지를 image 포트에, 작은 이미지를 overlay 포트에 연결합니다.',
+         'x, y 좌표를 설정하여 붙여넣기 위치를 지정합니다.',
+         'Mode를 선택합니다: overwrite (완전 덮어쓰기), blend (투명도 합성), alpha_channel (PNG 알파 사용).',
+         'blend 모드에서 Opacity를 0.5로 설정하면 반투명 합성이 됩니다.',
+         'Execute로 결과를 확인합니다.'],
+     'file':'',
+     'extra':'로고 삽입, 워터마크, Crop 결과를 다른 이미지에 합성할 때 유용합니다.'},
+
+    {'n':32, 'title':'수동 좌표 입력 (Val Coords + Image Extract)', 'difficulty':'★★',
+     'goal':'Val Coords 노드로 직접 좌표를 입력하여 Image Extract로 영역을 추출합니다.',
+     'concepts':['좌표 입력', 'Image Extract', 'coords 포트', '영역 추출'],
+     'pipe':[('Image Read','#4CAF50',''), ('Image Extract','#FF5722',''), ('Show','#4CAF50','')],
+     'steps':[
+         'Image Read로 이미지를 로드합니다.',
+         'Val Coords 노드를 추가합니다. Single 모드에서 x1, y1, x2, y2 값을 입력합니다.',
+         'Image Extract 노드를 추가합니다.',
+         'Image Read → Image Extract(image), Val Coords → Image Extract(coords)로 연결합니다.',
+         'Execute하면 지정 좌표 영역이 추출됩니다.',
+         'Multi 모드를 사용하면 여러 좌표를 한 줄에 하나씩 입력 가능합니다.'],
+     'file':'',
+     'extra':'Haar Cascade, Bounding Rect, Template Match의 coords/matches 출력도 Image Extract에 연결 가능합니다.'},
+
+    {'n':33, 'title':'크기 불일치 처리 (Size Mismatch)', 'difficulty':'★★',
+     'goal':'크기가 다른 두 이미지의 산술 연산에서 Size Mismatch 옵션을 활용합니다.',
+     'concepts':['크기 불일치', 'resize', '산술 연산', 'error 모드'],
+     'pipe':[('Read A','#4CAF50','640x480'), ('Add Weighted','#3F51B5','sizeMismatch'), ('Show','#4CAF50','')],
+     'steps':[
+         '서로 다른 해상도의 이미지를 Image Read 두 개로 로드합니다 (예: 640x480 + 320x240).',
+         'Add Weighted를 추가하고 두 이미지를 연결합니다.',
+         '기본 설정(Size Mismatch = error)에서는 크기 불일치 에러가 발생합니다.',
+         'Properties에서 Size Mismatch를 resize_img2로 변경하면 img2를 img1 크기로 자동 리사이즈합니다.',
+         'resize_img1은 반대로 img1을 img2 크기로 리사이즈합니다.',
+         '명시적으로 크기를 맞추려면 별도의 Resize 노드를 사용하는 것을 권장합니다.'],
+     'file':'',
+     'extra':'모든 두-이미지 산술 노드(Add, Subtract, Multiply, AbsDiff, Bitwise AND/OR/XOR)에 동일한 옵션이 있습니다.'},
+
+    {'n':34, 'title':'프로젝트 저장/불러오기 (Save/Load with Images)', 'difficulty':'★',
+     'goal':'이미지가 포함된 프로젝트를 ZIP으로 저장하고 완전히 복원합니다.',
+     'concepts':['프로젝트 저장', 'ZIP', '이미지 포함', '프리뷰 복원'],
+     'pipe':[('Save','#FFC107',''), ('project.zip','#9C27B0','flow+images'), ('Load','#FFC107',''), ('Restored','#4CAF50','')],
+     'steps':[
+         '파이프라인을 구성하고 Execute로 실행합니다.',
+         '툴바에서 Save를 클릭합니다. 이미지가 있으면 자동으로 .zip 파일로 저장됩니다.',
+         'ZIP 내부: flow.json (노드 그래프) + images/ 폴더 (원본 이미지들).',
+         'Load를 클릭하고 저장한 .zip 파일을 선택합니다.',
+         '이미지가 자동 복원되고 프리뷰가 표시됩니다. 바로 Execute로 재실행 가능합니다.',
+         '이미지가 없는 플로우는 기존처럼 .json으로 저장됩니다.'],
+     'file':'',
+     'extra':'다른 컴퓨터나 학생 간에 프로젝트를 공유할 때 ZIP 파일 하나로 완전한 전달이 가능합니다.'},
 ]
 
 
@@ -1684,10 +1747,15 @@ class SamTextbook(FPDF):
             self.ln(3)
             self.set_text_color(50, 50, 50)
             # Node graph diagram from JSON (with image previews)
-            json_path = os.path.join(BASE_DIR, 'examples', ex['file'])
-            self.bold_text('노드 그래프 (각 노드에 처리 결과 미리보기 포함):')
-            self.add_graph_image(json_path, height_mm=55)
-            self.ln(1)
+            if ex.get('file'):
+                json_path = os.path.join(BASE_DIR, 'examples', ex['file'])
+                self.bold_text('노드 그래프 (각 노드에 처리 결과 미리보기 포함):')
+                self.add_graph_image(json_path, height_mm=55)
+                self.ln(1)
+            elif ex.get('pipe'):
+                self.bold_text('파이프라인 구성:')
+                self.add_pipeline_image(ex['pipe'])
+                self.ln(1)
             # Steps
             self.bold_text('단계별 구성 방법:')
             self.ln(1)

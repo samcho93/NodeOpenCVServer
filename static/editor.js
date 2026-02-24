@@ -2502,15 +2502,23 @@
         Object.keys(_previewImageCache).forEach(k => delete _previewImageCache[k]);
         state.undoStack = [];
 
-        // Restore image previews for nodes that have imageId
+        // Restore image/video previews for nodes that have imageId
         if (imagePreviews) {
             for (const node of state.nodes) {
                 const imgId = node.properties && node.properties.imageId;
                 if (imgId && imagePreviews[imgId]) {
+                    const info = imagePreviews[imgId];
                     state.nodeResults[node.id] = {
-                        preview: imagePreviews[imgId].preview,
-                        shape: imagePreviews[imgId].shape,
+                        preview: info.preview,
+                        shape: info.shape,
                     };
+                    // Restore video properties if present
+                    if (info.filepath) {
+                        node.properties.filepath = info.filepath;
+                    }
+                    if (info.totalFrames) {
+                        node.properties.totalFrames = info.totalFrames;
+                    }
                     // Update label with filename if available
                     if (node.properties.filename) {
                         node.label = node.properties.filename;

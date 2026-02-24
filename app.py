@@ -2538,20 +2538,27 @@ def save_project():
     ZIP structure:
       flow.json
       images/<imageId>.png
+      videos/<videoId>.<ext>
     """
     try:
         flow_data = request.get_json()
         if not flow_data:
             return jsonify({'error': 'No flow data provided'}), 400
 
-        # Collect all imageIds from nodes
+        # Collect all imageIds and video filepaths from nodes
         image_ids = set()
+        video_files = {}  # imageId -> filepath
         nodes = flow_data.get('nodes', [])
         for node in nodes:
             props = node.get('properties', {})
             img_id = props.get('imageId')
             if img_id:
                 image_ids.add(img_id)
+            # Video nodes have filepath
+            if node.get('type') == 'video_read' and props.get('filepath'):
+                vid_id = img_id or props.get('filepath', '')
+                if props.get('filepath') and os.path.exists(props['filepath']):
+                    video_files[img_id] = props['filepath']
 
         # Build ZIP in memory
         zip_buffer = io.BytesIO()
@@ -2561,11 +2568,18 @@ def save_project():
 
             # Write images
             for img_id in image_ids:
+                if img_id in video_files:
+                    continue  # handled as video
                 img = g.session.image_store.get(img_id)
                 if img is not None:
                     success, buffer = cv2.imencode('.png', img)
                     if success:
                         zf.writestr(f'images/{img_id}.png', buffer.tobytes())
+
+            # Write videos
+            for vid_id, filepath in video_files.items():
+                ext = os.path.splitext(filepath)[1] or '.mp4'
+                zf.write(filepath, f'videos/{vid_id}{ext}')
 
         zip_buffer.seek(0)
         resp = make_response(zip_buffer.read())
@@ -2630,9 +2644,43 @@ def load_project():
                             'shape': list(img.shape),
                         }
 
+            # Read videos
+            video_previews = {}
+            for name in zf.namelist():
+                if name.startswith('videos/') and name != 'videos/':
+                    vid_data = zf.read(name)
+                    vid_id = os.path.splitext(os.path.basename(name))[0]
+                    ext = os.path.splitext(name)[1] or '.mp4'
+                    # Save video to upload folder
+                    vid_path = os.path.join(g.session.upload_folder, f'{vid_id}{ext}')
+                    with open(vid_path, 'wb') as vf:
+                        vf.write(vid_data)
+                    # Extract first frame for preview
+                    cap = cv2.VideoCapture(vid_path)
+                    if cap.isOpened():
+                        ret, frame = cap.read()
+                        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                        cap.release()
+                        if ret and frame is not None:
+                            g.session.image_store[vid_id] = frame
+                            video_previews[vid_id] = {
+                                'preview': encode_image_jpeg(frame),
+                                'shape': list(frame.shape),
+                                'filepath': vid_path,
+                                'totalFrames': total_frames,
+                            }
+
+        # Update flow node filepaths for videos
+        if video_previews and flow_data:
+            for node in flow_data.get('nodes', []):
+                if node.get('type') == 'video_read':
+                    vid_id = node.get('properties', {}).get('imageId', '')
+                    if vid_id in video_previews:
+                        node['properties']['filepath'] = video_previews[vid_id]['filepath']
+
         return jsonify({
             'flow': flow_data,
-            'images': image_previews,
+            'images': {**image_previews, **video_previews},
         })
 
     except Exception as e:
