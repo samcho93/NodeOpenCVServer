@@ -2687,6 +2687,40 @@ def load_project():
         return jsonify({'error': f'Load project failed: {str(e)}'}), 500
 
 
+@app.route('/api/examples', methods=['GET'])
+def list_examples():
+    """List available example ZIP project files."""
+    examples_dir = os.path.join(BASE_DIR, 'examples_zip')
+    if not os.path.exists(examples_dir):
+        return jsonify([])
+    files = []
+    for fn in sorted(os.listdir(examples_dir)):
+        if fn.endswith('.zip'):
+            fp = os.path.join(examples_dir, fn)
+            size = os.path.getsize(fp)
+            # Extract display name: "05_face_detection.zip" → "05. Face Detection"
+            name = fn.replace('.zip', '')
+            parts = name.split('_', 1)
+            num = parts[0] if parts else ''
+            title = parts[1].replace('_', ' ').title() if len(parts) > 1 else name
+            files.append({
+                'filename': fn,
+                'name': f'{num}. {title}',
+                'size': size,
+            })
+    return jsonify(files)
+
+
+@app.route('/api/examples/<path:filename>', methods=['GET'])
+def get_example(filename):
+    """Serve an example ZIP file for loading."""
+    examples_dir = os.path.join(BASE_DIR, 'examples_zip')
+    filepath = os.path.join(examples_dir, filename)
+    if not os.path.exists(filepath) or not filename.endswith('.zip'):
+        return jsonify({'error': 'Example not found'}), 404
+    return send_from_directory(examples_dir, filename, mimetype='application/zip')
+
+
 @app.route('/api/stop_video_loop', methods=['POST'])
 def stop_video_loop():
     """Signal the video loop to stop."""

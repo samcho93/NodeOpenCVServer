@@ -2706,6 +2706,122 @@
 
     document.getElementById('btn-load').addEventListener('click', loadFlow);
 
+    // ===== Examples Modal =====
+    document.getElementById('btn-examples').addEventListener('click', async () => {
+        const overlay = document.getElementById('examples-overlay');
+        const listEl = document.getElementById('examples-list');
+        overlay.style.display = 'flex';
+        listEl.innerHTML = '<p style="color:#a6adc8;">Loading examples...</p>';
+
+        try {
+            const resp = await sessionFetch('/api/examples');
+            const examples = await resp.json();
+            if (!examples.length) {
+                listEl.innerHTML = '<p style="color:#f38ba8;">No examples found. Run bundle_examples.py first.</p>';
+                return;
+            }
+
+            let html = '';
+            for (const ex of examples) {
+                const sizeStr = ex.size > 1024 * 1024
+                    ? (ex.size / 1024 / 1024).toFixed(1) + ' MB'
+                    : (ex.size / 1024).toFixed(0) + ' KB';
+                html += `<div class="example-item" data-file="${ex.filename}" style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; margin:4px 0; background:#313244; border-radius:8px; cursor:pointer; border:1px solid transparent; transition:all 0.15s;">
+                    <div>
+                        <div style="color:#cdd6f4; font-weight:600; font-size:14px;">${ex.name}</div>
+                        <div style="color:#6c7086; font-size:11px; margin-top:2px;">${ex.filename} (${sizeStr})</div>
+                    </div>
+                    <button class="example-load-btn" data-file="${ex.filename}" style="background:#89b4fa; color:#1e1e2e; border:none; border-radius:6px; padding:6px 16px; font-weight:600; cursor:pointer; font-size:12px; white-space:nowrap;">Load</button>
+                </div>`;
+            }
+            listEl.innerHTML = html;
+
+            // Hover effect
+            listEl.querySelectorAll('.example-item').forEach(item => {
+                item.addEventListener('mouseenter', () => { item.style.borderColor = '#89b4fa'; item.style.background = '#3b3d50'; });
+                item.addEventListener('mouseleave', () => { item.style.borderColor = 'transparent'; item.style.background = '#313244'; });
+            });
+
+            // Load button click
+            listEl.querySelectorAll('.example-load-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const filename = btn.dataset.file;
+                    btn.textContent = 'Loading...';
+                    btn.disabled = true;
+                    await loadExampleFromServer(filename);
+                    overlay.style.display = 'none';
+                });
+            });
+
+            // Row click also loads
+            listEl.querySelectorAll('.example-item').forEach(item => {
+                item.addEventListener('click', async () => {
+                    const filename = item.dataset.file;
+                    const btn = item.querySelector('.example-load-btn');
+                    if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
+                    await loadExampleFromServer(filename);
+                    overlay.style.display = 'none';
+                });
+            });
+        } catch (err) {
+            listEl.innerHTML = `<p style="color:#f38ba8;">Failed to load examples: ${err.message}</p>`;
+        }
+    });
+
+    document.getElementById('examples-close').addEventListener('click', () => {
+        document.getElementById('examples-overlay').style.display = 'none';
+    });
+    document.getElementById('examples-overlay').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+    });
+
+    async function loadExampleFromServer(filename) {
+        setStatus(`Loading example: ${filename}...`, '');
+        try {
+            // Fetch the ZIP from server
+            const resp = await sessionFetch(`/api/examples/${filename}`);
+            if (!resp.ok) {
+                setStatus('Failed to download example: HTTP ' + resp.status, 'error');
+                return;
+            }
+            const zipBlob = await resp.blob();
+
+            // Upload the ZIP to load_project endpoint
+            const formData = new FormData();
+            formData.append('file', zipBlob, filename);
+            const loadResp = await sessionFetch('/api/load_project', {
+                method: 'POST',
+                body: formData,
+            });
+            if (!loadResp.ok) {
+                let errMsg = 'HTTP ' + loadResp.status;
+                try {
+                    const ct = loadResp.headers.get('content-type') || '';
+                    if (ct.includes('application/json')) {
+                        const err = await loadResp.json();
+                        errMsg = err.error || errMsg;
+                    }
+                } catch (_) {}
+                setStatus('Load example failed: ' + errMsg, 'error');
+                return;
+            }
+            const data = await loadResp.json();
+            if (data.error) {
+                setStatus('Load example failed: ' + data.error, 'error');
+                return;
+            }
+            const flow = data.flow;
+            const imagePreviews = data.images || {};
+            applyFlowData(flow, imagePreviews);
+
+            const imgCount = Object.keys(imagePreviews).length;
+            setStatus(`Example loaded: ${filename} (${imgCount} asset${imgCount !== 1 ? 's' : ''} restored)`, 'success');
+        } catch (err) {
+            setStatus('Load example failed: ' + err.message, 'error');
+        }
+    }
+
     // Context menu (right click delete)
     canvas.addEventListener('contextmenu', (e) => {
         e.preventDefault();
@@ -2754,10 +2870,12 @@
         });
     });
 
-    // ESC closes help too
+    // ESC closes help / examples
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && helpOverlay.style.display !== 'none') {
-            helpOverlay.style.display = 'none';
+        if (e.key === 'Escape') {
+            if (helpOverlay.style.display !== 'none') helpOverlay.style.display = 'none';
+            const exOverlay = document.getElementById('examples-overlay');
+            if (exOverlay && exOverlay.style.display !== 'none') exOverlay.style.display = 'none';
         }
     });
 
