@@ -15,7 +15,8 @@ python app.py
 ### Web Browser
 
 ```
-http://localhost:5000
+- http://localhost:5000
+- http://serverip:5000
 ```
 
 ---
