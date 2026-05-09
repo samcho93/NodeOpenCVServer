@@ -2870,14 +2870,247 @@
         });
     });
 
-    // ESC closes help / examples
+    // ESC closes help / examples / report
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             if (helpOverlay.style.display !== 'none') helpOverlay.style.display = 'none';
             const exOverlay = document.getElementById('examples-overlay');
             if (exOverlay && exOverlay.style.display !== 'none') exOverlay.style.display = 'none';
+            const reportOverlay = document.getElementById('report-overlay');
+            if (reportOverlay && reportOverlay.style.display !== 'none') reportOverlay.style.display = 'none';
         }
     });
+
+    // ===== Report (PDF) Modal =====
+    const reportOverlay = document.getElementById('report-overlay');
+    const btnReport = document.getElementById('btn-report');
+    const btnReportClose = document.getElementById('report-close-btn');
+    const btnReportExport = document.getElementById('report-export-btn');
+
+    function _escHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function _topoSort(nodes, connections) {
+        const id2node = new Map(nodes.map(n => [n.id, n]));
+        const indeg = new Map(nodes.map(n => [n.id, 0]));
+        const out = new Map(nodes.map(n => [n.id, []]));
+        for (const c of connections) {
+            if (id2node.has(c.sourceNode) && id2node.has(c.targetNode)) {
+                out.get(c.sourceNode).push(c.targetNode);
+                indeg.set(c.targetNode, (indeg.get(c.targetNode) || 0) + 1);
+            }
+        }
+        const q = nodes.filter(n => (indeg.get(n.id) || 0) === 0).map(n => n.id);
+        const seen = new Set(q);
+        const order = [];
+        while (q.length) {
+            const id = q.shift();
+            order.push(id);
+            for (const nx of out.get(id) || []) {
+                indeg.set(nx, indeg.get(nx) - 1);
+                if (indeg.get(nx) === 0 && !seen.has(nx)) { seen.add(nx); q.push(nx); }
+            }
+        }
+        // Append any remaining (cycles) so all nodes show up in the report
+        for (const n of nodes) if (!seen.has(n.id)) order.push(n.id);
+        return order.map(id => id2node.get(id));
+    }
+
+    // Capture the canvas graph (all nodes + connections) as a PNG data URL.
+    // Temporarily resizes the canvas and adjusts pan/zoom to fit the world bbox of all nodes,
+    // then restores the original viewport.
+    async function _captureGraphImage(scale = 2) {
+        if (!state.nodes || state.nodes.length === 0) return null;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const n of state.nodes) {
+            const h = getNodeHeight(n);
+            if (n.x < minX) minX = n.x;
+            if (n.y < minY) minY = n.y;
+            if (n.x + NODE_WIDTH > maxX) maxX = n.x + NODE_WIDTH;
+            if (n.y + h > maxY) maxY = n.y + h;
+        }
+        const pad = 30;
+        minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+        const worldW = Math.max(1, maxX - minX);
+        const worldH = Math.max(1, maxY - minY);
+
+        // Cap to prevent runaway memory on huge graphs (cap at ~3000px on the longer side).
+        const cap = 3000;
+        let s = scale;
+        if (worldW * s > cap || worldH * s > cap) {
+            s = Math.min(cap / worldW, cap / worldH);
+        }
+        const targetW = Math.max(1, Math.round(worldW * s));
+        const targetH = Math.max(1, Math.round(worldH * s));
+
+        // Save current viewport
+        const oldW = canvas.width, oldH = canvas.height;
+        const oldPan = { x: state.pan.x, y: state.pan.y };
+        const oldZoom = state.zoom;
+
+        try {
+            canvas.width = targetW;
+            canvas.height = targetH;
+            state.zoom = s;
+            state.pan.x = -minX * s;
+            state.pan.y = -minY * s;
+            draw();
+            // Wait one frame so any not-yet-decoded preview thumbnails finish painting.
+            await new Promise(r => requestAnimationFrame(r));
+            return canvas.toDataURL('image/png');
+        } finally {
+            canvas.width = oldW;
+            canvas.height = oldH;
+            state.zoom = oldZoom;
+            state.pan.x = oldPan.x;
+            state.pan.y = oldPan.y;
+            draw();
+        }
+    }
+
+    async function _buildReportPayload() {
+        const ordered = _topoSort(state.nodes, state.connections);
+        const graphImage = await _captureGraphImage(2);
+        return {
+            title:       document.getElementById('report-title').value || '제출용 보고서',
+            department:  document.getElementById('report-department').value || '',
+            studentId:   document.getElementById('report-student-id').value || '',
+            name:        document.getElementById('report-name').value || '',
+            company:     document.getElementById('report-company').value || '',
+            graphImage:  graphImage,
+            nodeCount:   state.nodes.length,
+            connectionCount: state.connections.length,
+            nodes: ordered.map(n => ({ id: n.id, type: n.type, label: n.label || '' })),
+        };
+    }
+
+    async function _renderReportPreview() {
+        const el = document.getElementById('report-preview');
+        if (!el) return;
+        // Render skeleton synchronously so UI is responsive while we capture.
+        el.innerHTML = '<p style="color:#888;">미리보기 생성 중...</p>';
+
+        const payload = await _buildReportPayload();
+
+        const now = new Date();
+        const pad = x => String(x).padStart(2, '0');
+        const generatedAt = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+        let html = '';
+        html += `<div style="text-align:center; padding:24px 0 12px; border-bottom:2px solid #1f4f8b;">`;
+        html += `<div style="font-size:24px; font-weight:700; color:#1f4f8b;">${_escHtml(payload.title || '제출용 보고서')}</div>`;
+        html += `</div>`;
+
+        const cover = [
+            ['학과',     payload.department],
+            ['학번',     payload.studentId],
+            ['이름',     payload.name],
+            ['소속회사', payload.company],
+            ['생성일자', generatedAt],
+            ['노드 수', String(payload.nodeCount)],
+            ['연결 수', String(payload.connectionCount)],
+        ];
+        html += `<table style="width:100%; border-collapse:collapse; margin:18px 0;">`;
+        for (const [k, v] of cover) {
+            html += `<tr>`;
+            html += `<th style="text-align:left; width:30%; padding:8px 10px; background:#eef0f6; border:1px solid #bbbbcc; color:#3b3b5c; font-weight:600;">${_escHtml(k)}</th>`;
+            html += `<td style="padding:8px 10px; border:1px solid #bbbbcc;">${_escHtml(v) || '-'}</td>`;
+            html += `</tr>`;
+        }
+        html += `</table>`;
+
+        html += `<div style="margin-top:18px; font-size:15px; font-weight:700; color:#1f4f8b; border-bottom:1px solid #c7c9d6; padding-bottom:4px;">노드 그래프</div>`;
+
+        if (payload.graphImage) {
+            html += `<div style="margin-top:10px; text-align:center; background:#1e1e2e; border:1px solid #c7c9d6; border-radius:4px; padding:8px;">`;
+            html += `<img src="${payload.graphImage}" alt="graph" style="max-width:100%; height:auto; display:block; margin:0 auto;">`;
+            html += `</div>`;
+        } else {
+            html += `<p style="color:#888; padding:14px 0;">캔버스에 노드가 없습니다. 노드를 추가하고 다시 시도하세요.</p>`;
+        }
+
+        el.innerHTML = html;
+    }
+
+    async function _openReportModal() {
+        if (!reportOverlay) return;
+        const titleEl = document.getElementById('report-title');
+        if (titleEl && !titleEl.value) titleEl.value = '제출용 보고서';
+        reportOverlay.style.display = 'flex';
+        await _renderReportPreview();
+    }
+
+    if (btnReport) {
+        btnReport.addEventListener('click', _openReportModal);
+    }
+    if (btnReportClose) {
+        btnReportClose.addEventListener('click', () => { reportOverlay.style.display = 'none'; });
+    }
+    if (reportOverlay) {
+        reportOverlay.addEventListener('click', (e) => {
+            if (e.target === reportOverlay) reportOverlay.style.display = 'none';
+        });
+        // Re-render preview on any text input change.
+        // For text fields the cover info changes but the graph image stays the same — we re-capture
+        // anyway for simplicity, but debounce to avoid flicker on rapid typing.
+        let _previewTimer = null;
+        const debouncedPreview = () => {
+            if (_previewTimer) clearTimeout(_previewTimer);
+            _previewTimer = setTimeout(() => { _renderReportPreview(); }, 250);
+        };
+        ['report-title', 'report-department', 'report-student-id', 'report-name', 'report-company']
+            .forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', debouncedPreview);
+            });
+    }
+    if (btnReportExport) {
+        btnReportExport.addEventListener('click', async () => {
+            if (state.nodes.length === 0) {
+                setStatus('보고서로 출력할 노드가 없습니다', 'error');
+                return;
+            }
+            btnReportExport.disabled = true;
+            const originalText = btnReportExport.textContent;
+            btnReportExport.textContent = '생성 중...';
+            try {
+                const payload = await _buildReportPayload();
+                const resp = await sessionFetch('/api/report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!resp.ok) {
+                    let msg = `HTTP ${resp.status}`;
+                    try { const j = await resp.json(); if (j.error) msg = j.error; } catch (e) {}
+                    setStatus('보고서 생성 실패: ' + msg, 'error');
+                    return;
+                }
+                const blob = await resp.blob();
+                let filename = 'report.pdf';
+                const cd = resp.headers.get('Content-Disposition') || '';
+                const m = /filename="?([^";]+)"?/i.exec(cd);
+                if (m) filename = m[1];
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                setStatus('보고서 다운로드: ' + filename, 'success');
+            } catch (err) {
+                setStatus('보고서 생성 오류: ' + err.message, 'error');
+            } finally {
+                btnReportExport.disabled = false;
+                btnReportExport.textContent = originalText;
+            }
+        });
+    }
 
     // ===== Panel Collapse/Expand =====
     const palette = document.getElementById('node-palette');

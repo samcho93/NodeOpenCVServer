@@ -17,6 +17,40 @@ import cv2
 import numpy as np
 from flask import Flask, request, jsonify, send_from_directory, render_template, Response, stream_with_context, g, make_response
 
+# ---- Report (PDF) generation ----
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    Image as RLImage, PageBreak, KeepTogether,
+)
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+# Register Korean font (Malgun Gothic on Windows). Falls back to Helvetica if unavailable.
+KOREAN_FONT = 'Helvetica'
+KOREAN_FONT_BOLD = 'Helvetica-Bold'
+for _candidate, _bold in [
+    (r'C:\Windows\Fonts\malgun.ttf', r'C:\Windows\Fonts\malgunbd.ttf'),
+    (r'C:\Windows\Fonts\gulim.ttc', None),
+    ('/usr/share/fonts/truetype/nanum/NanumGothic.ttf', '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf'),
+]:
+    if os.path.exists(_candidate):
+        try:
+            pdfmetrics.registerFont(TTFont('KoreanFont', _candidate))
+            KOREAN_FONT = 'KoreanFont'
+            if _bold and os.path.exists(_bold):
+                pdfmetrics.registerFont(TTFont('KoreanFont-Bold', _bold))
+                KOREAN_FONT_BOLD = 'KoreanFont-Bold'
+            else:
+                KOREAN_FONT_BOLD = 'KoreanFont'
+            break
+        except Exception:
+            continue
+
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
@@ -32,6 +66,7 @@ class SessionData:
     def __init__(self, sid):
         self.sid = sid
         self.image_store = {}
+        self.image_paths = {}  # image_id -> original uploaded file path (for re-reading with flags)
         self.script_sessions = {}
         self.video_loop_stop = False
         self.created_at = time.time()
@@ -154,14 +189,27 @@ def store_image(img):
 def process_image_read(node, inputs):
     """Read image from server store or file path."""
     props = node.get('properties', {})
+    flags_str = props.get('flags', 'IMREAD_COLOR')
+    flags = getattr(cv2, flags_str, cv2.IMREAD_COLOR)
     # First try server-side stored image
     img_id = props.get('imageId', '')
     if img_id and img_id in g.session.image_store:
-        return {'image': g.session.image_store[img_id].copy()}
+        # If a non-default flag is requested and we have the original file, re-read with that flag
+        # (the cached array is BGR from the upload step, so it can't reproduce IMREAD_UNCHANGED's alpha).
+        src_path = g.session.image_paths.get(img_id)
+        if flags_str != 'IMREAD_COLOR' and src_path and os.path.exists(src_path):
+            img = cv2.imread(src_path, flags)
+            if img is not None and len(img.shape) == 2:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            return {'image': img}
+        # Default flag, or no path available: serve from cache, applying grayscale post-hoc if requested
+        img = g.session.image_store[img_id].copy()
+        if flags_str == 'IMREAD_GRAYSCALE' and img is not None and len(img.shape) == 3:
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        return {'image': img}
     # Try file path
     filepath = props.get('filepath', '')
-    flags_str = props.get('flags', 'IMREAD_COLOR')
-    flags = getattr(cv2, flags_str, cv2.IMREAD_COLOR)
     if filepath and os.path.exists(filepath):
         img = cv2.imread(filepath, flags)
         if img is not None and len(img.shape) == 2:
@@ -2442,8 +2490,9 @@ def upload_image():
         os.remove(filepath)
         return jsonify({'error': 'Could not read image file'}), 400
 
-    # Store in session memory
+    # Store in session memory + remember on-disk path so flags (IMREAD_GRAYSCALE/IMREAD_UNCHANGED) can re-read
     g.session.image_store[file_id] = img
+    g.session.image_paths[file_id] = filepath
 
     return jsonify({
         'imageId': file_id,
@@ -4308,6 +4357,154 @@ def api_generate_code():
         return jsonify({'code': code})
     except Exception as e:
         return jsonify({'code': f'# Code generation error: {e}\n', 'error': str(e)})
+
+
+# ---- Report (PDF) export ----
+
+def _decode_data_url_image(data_url):
+    """Decode a base64 data URL into a BytesIO of the raw image bytes. Returns None on failure."""
+    if not data_url or not isinstance(data_url, str):
+        return None
+    try:
+        if ',' in data_url:
+            b64 = data_url.split(',', 1)[1]
+        else:
+            b64 = data_url
+        raw = base64.b64decode(b64)
+        return io.BytesIO(raw)
+    except Exception:
+        return None
+
+
+def _format_property_value(v):
+    """Render a property value as a short, PDF-friendly string."""
+    if v is None:
+        return ''
+    if isinstance(v, bool):
+        return 'true' if v else 'false'
+    if isinstance(v, (int, float)):
+        return str(v)
+    if isinstance(v, (list, tuple)):
+        return ', '.join(_format_property_value(x) for x in v)
+    if isinstance(v, dict):
+        return json.dumps(v, ensure_ascii=False)
+    s = str(v)
+    if len(s) > 200:
+        s = s[:200] + '...'
+    return s
+
+
+def _build_report_pdf(meta, graph_image_data_url, node_count, connection_count):
+    """Build the PDF report (cover page + captured node-graph image) into a BytesIO buffer."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=18 * mm, rightMargin=18 * mm,
+        topMargin=18 * mm, bottomMargin=18 * mm,
+        title=meta.get('title') or 'OpenCV Node Report',
+        author=meta.get('name') or '',
+    )
+
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle('body', parent=styles['Normal'],
+                          fontName=KOREAN_FONT, fontSize=10, leading=14)
+    label = ParagraphStyle('label', parent=body,
+                           fontName=KOREAN_FONT_BOLD, textColor=colors.HexColor('#3b3b5c'))
+    title = ParagraphStyle('title', parent=body,
+                           fontName=KOREAN_FONT_BOLD, fontSize=22, leading=28,
+                           alignment=TA_CENTER, spaceAfter=20)
+    h2 = ParagraphStyle('h2', parent=body,
+                        fontName=KOREAN_FONT_BOLD, fontSize=14, leading=18,
+                        spaceBefore=8, spaceAfter=4,
+                        textColor=colors.HexColor('#1f4f8b'))
+    small = ParagraphStyle('small', parent=body, fontSize=9, leading=12,
+                           textColor=colors.HexColor('#555575'))
+
+    story = []
+
+    # ===== Cover page =====
+    story.append(Spacer(1, 30 * mm))
+    story.append(Paragraph(meta.get('title') or '제출용 보고서', title))
+    story.append(Spacer(1, 8 * mm))
+
+    info_rows = [
+        ['학과',     meta.get('department', '') or '-'],
+        ['학번',     meta.get('studentId', '')   or '-'],
+        ['이름',     meta.get('name', '')        or '-'],
+        ['소속회사', meta.get('company', '')     or '-'],
+        ['생성일자', meta.get('generatedAt', '') or time.strftime('%Y-%m-%d %H:%M:%S')],
+        ['노드 수', f"{node_count}"],
+        ['연결 수', f"{connection_count}"],
+    ]
+    info_data = [[Paragraph(k, label), Paragraph(_format_property_value(v), body)] for k, v in info_rows]
+    info_table = Table(info_data, colWidths=[35 * mm, 120 * mm])
+    info_table.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.6, colors.HexColor('#888899')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#bbbbcc')),
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#eef0f6')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story.append(info_table)
+    story.append(PageBreak())
+
+    # ===== Graph image page =====
+    story.append(Paragraph('노드 그래프', h2))
+    story.append(Spacer(1, 4))
+
+    img_buf = _decode_data_url_image(graph_image_data_url) if graph_image_data_url else None
+    if img_buf is None:
+        story.append(Paragraph('캡처된 그래프 이미지가 없습니다.', small))
+    else:
+        try:
+            rl_img = RLImage(img_buf)
+            iw, ih = rl_img.imageWidth, rl_img.imageHeight
+            # Available area inside margins on A4 portrait
+            avail_w = A4[0] - 36 * mm
+            avail_h = A4[1] - 36 * mm - 18 * mm  # leave room for the heading
+            scale = min(avail_w / iw, avail_h / ih, 1.0)
+            rl_img.drawWidth = iw * scale
+            rl_img.drawHeight = ih * scale
+            story.append(rl_img)
+        except Exception as e:
+            story.append(Paragraph(f"[그래프 이미지 렌더 실패: {e}]", small))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf
+
+
+@app.route('/api/report', methods=['POST'])
+def api_report():
+    """Generate a PDF report for the current node graph and submitted student info."""
+    data = request.json or {}
+    meta = {
+        'title':       (data.get('title') or '제출용 보고서').strip(),
+        'department':  (data.get('department') or '').strip(),
+        'studentId':   (data.get('studentId') or '').strip(),
+        'name':        (data.get('name') or '').strip(),
+        'company':     (data.get('company') or '').strip(),
+        'generatedAt': time.strftime('%Y-%m-%d %H:%M:%S'),
+    }
+    graph_image = data.get('graphImage')
+    node_count = int(data.get('nodeCount') or len(data.get('nodes') or []) or 0)
+    connection_count = int(data.get('connectionCount') or len(data.get('connections') or []) or 0)
+
+    try:
+        buf = _build_report_pdf(meta, graph_image, node_count, connection_count)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Report build failed: {e}'}), 500
+
+    safe_name = (meta['name'] or 'report').replace(' ', '_')
+    filename = f"report_{safe_name}_{time.strftime('%Y%m%d_%H%M%S')}.pdf"
+    resp = make_response(buf.getvalue())
+    resp.headers['Content-Type'] = 'application/pdf'
+    resp.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
 
 
 # ---- Web-based Script Editor Support ----
