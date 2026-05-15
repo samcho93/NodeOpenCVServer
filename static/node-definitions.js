@@ -2,6 +2,36 @@
  * Node type definitions: properties, ports, colors, and OpenCV documentation.
  */
 const NODE_DEFS = {
+    // Annotation/decoration node — no OpenCV processing. Used to label/group sections
+    // of the canvas (e.g. titling a sub-graph). Rendered as plain text on the canvas.
+    text_label: {
+        label: 'Text Label',
+        category: 'misc',
+        color: '#9CA3AF',
+        inputs: [],
+        outputs: [],
+        properties: [
+            { key: 'text',       label: 'Text',      type: 'textarea', default: '제목' },
+            { key: 'fontSize',   label: 'Size (px)', type: 'number',   default: 28, min: 8, max: 200, step: 1 },
+            { key: 'color',      label: 'Color',     type: 'color',    default: '#cdd6f4' },
+            { key: 'fontFamily', label: 'Font',      type: 'select',   default: 'Segoe UI',
+              options: ['Segoe UI', 'Malgun Gothic', '맑은 고딕', 'Nanum Gothic', '나눔고딕', 'Gulim', '굴림', 'Batang', '바탕', 'Consolas', 'Arial', 'Times New Roman', 'Courier New'] },
+            { key: 'bold',       label: 'Bold',      type: 'checkbox', default: false },
+            { key: 'italic',     label: 'Italic',    type: 'checkbox', default: false },
+        ],
+        doc: {
+            signature: '(annotation only — not OpenCV)',
+            description: '캔버스에 표시되는 주석/타이틀 텍스트입니다. OpenCV 처리에는 영향이 없으며, 노드 그룹을 시각적으로 구분하거나 제목을 붙이기 위한 용도입니다. 한글/영문 모두 지원, 크기/색상/폰트/굵게/기울임 조정 가능.',
+            params: [
+                { name: 'text', desc: '표시할 텍스트 (여러 줄 가능, Enter로 줄바꿈)' },
+                { name: 'fontSize', desc: '폰트 크기 (픽셀)' },
+                { name: 'color', desc: '텍스트 색상' },
+                { name: 'fontFamily', desc: '폰트 패밀리 — 한글: Malgun Gothic/Nanum Gothic 등' },
+            ],
+            returns: '없음 (캔버스 표시 전용)',
+        },
+    },
+
     image_read: {
         label: 'Image Read',
         category: 'io',
@@ -32,7 +62,8 @@ const NODE_DEFS = {
         inputs: [{ id: 'image', label: 'image' }],
         outputs: [],
         properties: [
-            { key: 'windowName', label: 'Window Name', type: 'text', default: 'Output' }
+            { key: 'windowName', label: 'Window Name', type: 'text', default: 'Output' },
+            { key: 'trackbars',  label: 'Trackbars',   type: 'trackbars', default: [] },
         ],
         doc: {
             signature: 'cv2.imshow(winname, mat)',

@@ -104,6 +104,10 @@
     // ===== Node preview image cache =====
     const _previewImageCache = {};  // nodeId -> { dataUrl, img (HTMLImageElement), loaded }
 
+    // When true, the next executePipeline() will skip auto-opening Image Show popups.
+    // Used so that auto-execute after Load doesn't spam the screen with windows.
+    let _suppressImageShowPopup = false;
+
     function getPreviewImage(nodeId) {
         const result = state.nodeResults[nodeId];
         if (!result || !result.preview) return null;
@@ -163,6 +167,9 @@
     const INFO_TEXT_H = 18;
 
     function getNodeHeight(node) {
+        if (node && node.type === 'text_label') {
+            return _textLabelMetrics(node).height;
+        }
         const def = NODE_DEFS[node.type];
         if (!def) return 40;
         const maxPorts = Math.max(def.inputs.length, def.outputs.length, 1);
@@ -246,7 +253,8 @@
         const maxY = Math.max(y1, y2);
         return state.nodes.filter(n => {
             const h = getNodeHeight(n);
-            return n.x + NODE_WIDTH >= minX && n.x <= maxX && n.y + h >= minY && n.y <= maxY;
+            const w = getNodeWidth(n);
+            return n.x + w >= minX && n.x <= maxX && n.y + h >= minY && n.y <= maxY;
         });
     }
 
@@ -369,6 +377,48 @@
         return Math.max(40, maxPorts * 24 + 16);
     }
 
+    // ===== Text Label helpers (annotation-only node with variable size) =====
+    function _textLabelFontSpec(node) {
+        const p = node.properties || {};
+        const size = Math.max(6, Number(p.fontSize) || 24);
+        const fam = p.fontFamily || 'Segoe UI';
+        const weight = p.bold ? 'bold ' : '';
+        const style = p.italic ? 'italic ' : '';
+        // Always include sans-serif fallback so missing fonts don't break layout
+        return { spec: `${style}${weight}${size}px "${fam}", sans-serif`, size };
+    }
+
+    function _textLabelMetrics(node) {
+        // Returns { width, height } in world units (canvas pre-transform pixels)
+        const text = String((node.properties && node.properties.text) || 'Text');
+        const { spec, size } = _textLabelFontSpec(node);
+        const lines = text.split(/\r?\n/);
+        ctx.save();
+        ctx.font = spec;
+        let maxW = 0;
+        for (const ln of lines) {
+            const w = ctx.measureText(ln || ' ').width;
+            if (w > maxW) maxW = w;
+        }
+        ctx.restore();
+        const lineH = size * 1.25;
+        return {
+            width:  Math.max(40, Math.ceil(maxW) + 12),
+            height: Math.max(size + 8, Math.ceil(lines.length * lineH) + 8),
+            lineH,
+            fontSpec: spec,
+            fontSize: size,
+            lines,
+        };
+    }
+
+    function getNodeWidth(node) {
+        if (node && node.type === 'text_label') {
+            return _textLabelMetrics(node).width;
+        }
+        return NODE_WIDTH;
+    }
+
     function getInputPorts(node) {
         const def = NODE_DEFS[node.type];
         if (!def) return [];
@@ -407,7 +457,8 @@
         for (let i = state.nodes.length - 1; i >= 0; i--) {
             const n = state.nodes[i];
             const h = getNodeHeight(n);
-            if (wx >= n.x && wx <= n.x + NODE_WIDTH && wy >= n.y && wy <= n.y + h) {
+            const w = getNodeWidth(n);
+            if (wx >= n.x && wx <= n.x + w && wy >= n.y && wy <= n.y + h) {
                 return n;
             }
         }
@@ -514,8 +565,32 @@
         for (const node of state.nodes) {
             const def = NODE_DEFS[node.type];
             if (!def) continue;
-            const h = getNodeHeight(node);
             const isSelected = (state.selectedNode && state.selectedNode.id === node.id) || isNodeSelected(node);
+
+            // --- Text Label: render plain text, no box, no ports ---
+            if (node.type === 'text_label') {
+                const m = _textLabelMetrics(node);
+                const color = (node.properties && node.properties.color) || '#cdd6f4';
+                ctx.save();
+                ctx.font = m.fontSpec;
+                ctx.fillStyle = color;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                for (let i = 0; i < m.lines.length; i++) {
+                    ctx.fillText(m.lines[i], node.x + 6, node.y + 4 + i * m.lineH);
+                }
+                if (isSelected) {
+                    ctx.setLineDash([5, 4]);
+                    ctx.strokeStyle = '#89b4fa';
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeRect(node.x - 3, node.y - 3, m.width + 6, m.height + 6);
+                    ctx.setLineDash([]);
+                }
+                ctx.restore();
+                continue;
+            }
+
+            const h = getNodeHeight(node);
             const result = state.nodeResults[node.id];
             const hasError = result?.error;
             const hasResult = result?.preview || (result?.info && !result?.error);
@@ -1384,6 +1459,52 @@
             html += `</tbody></table></div>`;
         }
 
+        // --- Image Show: trackbar editor ---
+        if (node.type === 'image_show') {
+            _skipProps.add('trackbars');
+            // Ensure storage exists
+            if (!Array.isArray(node.properties.trackbars)) node.properties.trackbars = [];
+
+            const allNodes = state.nodes.filter(n => n.id !== node.id);
+            html += `<div class="prop-row" style="flex-direction:column; align-items:stretch;">
+                <label style="margin-bottom:6px;">Trackbars
+                    <button class="prop-btn" data-tb-add style="float:right; padding:1px 8px; font-size:11px; background:#a6e3a1; color:#1e1e2e">+ Add</button>
+                </label>
+                <div id="tb-list" style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">`;
+
+            node.properties.trackbars.forEach((tb, i) => {
+                const numericProps = _getNumericPropsForNode(tb.nodeId);
+                html += `<div class="tb-row" data-tb-idx="${i}" style="border:1px solid #45475a; border-radius:6px; padding:6px 8px; background:#1e1e2e;">
+                    <div style="display:flex; gap:4px; margin-bottom:4px;">
+                        <input type="text" data-tb-field="name" value="${escapeAttr(tb.name || '')}" placeholder="Slider name"
+                               style="flex:1; min-width:0; padding:3px 6px; background:#181825; color:#cdd6f4; border:1px solid #45475a; border-radius:3px; font-size:12px;">
+                        <button class="prop-btn" data-tb-del style="padding:1px 8px; font-size:11px; background:#f38ba8; color:#1e1e2e">×</button>
+                    </div>
+                    <div style="display:flex; gap:4px; margin-bottom:4px;">
+                        <select data-tb-field="nodeId" style="flex:1; min-width:0; padding:3px 6px; background:#181825; color:#cdd6f4; border:1px solid #45475a; border-radius:3px; font-size:12px;">
+                            <option value="">-- target node --</option>
+                            ${allNodes.map(n => `<option value="${n.id}" ${tb.nodeId === n.id ? 'selected' : ''}>${escapeHtml(_nodeDisplayName(n))}</option>`).join('')}
+                        </select>
+                        <select data-tb-field="propKey" style="flex:1; min-width:0; padding:3px 6px; background:#181825; color:#cdd6f4; border:1px solid #45475a; border-radius:3px; font-size:12px;">
+                            <option value="">-- property --</option>
+                            ${numericProps.map(p => `<option value="${p.key}" ${tb.propKey === p.key ? 'selected' : ''}>${escapeHtml(p.label)} (${escapeHtml(p.key)})</option>`).join('')}
+                        </select>
+                    </div>
+                    <div style="display:flex; gap:4px;">
+                        <input type="number" data-tb-field="min"  value="${tb.min ?? 0}"   placeholder="min"  style="flex:1; min-width:0; padding:3px 6px; background:#181825; color:#cdd6f4; border:1px solid #45475a; border-radius:3px; font-size:12px;">
+                        <input type="number" data-tb-field="max"  value="${tb.max ?? 100}" placeholder="max"  style="flex:1; min-width:0; padding:3px 6px; background:#181825; color:#cdd6f4; border:1px solid #45475a; border-radius:3px; font-size:12px;">
+                        <input type="number" data-tb-field="step" value="${tb.step ?? 1}"  placeholder="step" style="flex:1; min-width:0; padding:3px 6px; background:#181825; color:#cdd6f4; border:1px solid #45475a; border-radius:3px; font-size:12px;">
+                    </div>
+                </div>`;
+            });
+
+            html += `</div>
+                <div style="font-size:11px; color:#6c7086; margin-top:6px; line-height:1.4;">
+                    Image Show 팝업창에 슬라이더로 나타납니다. 드래그하면 타겟 노드의 속성이 실시간으로 갱신됩니다.
+                </div>
+            </div>`;
+        }
+
         for (const prop of def.properties) {
             if (_skipProps.has(prop.key)) continue;
 
@@ -1446,6 +1567,13 @@
                 html += `<div class="prop-row"><label>
                     <input type="checkbox" data-prop="${prop.key}" ${node.properties[prop.key] ? 'checked' : ''}> ${prop.label}
                     </label></div>`;
+            } else if (prop.type === 'color') {
+                const cval = node.properties[prop.key] || prop.default || '#cdd6f4';
+                html += `<div class="prop-row"><label>${prop.label}</label>
+                    <div style="display:flex; gap:6px; align-items:center; flex:1">
+                        <input type="color" value="${escapeAttr(String(cval))}" data-prop="${prop.key}" style="width:40px; height:26px; padding:0; background:transparent; border:1px solid #45475a; border-radius:3px; cursor:pointer;">
+                        <input type="text" value="${escapeAttr(String(cval))}" data-color-text="${prop.key}" style="flex:1; min-width:0; padding:3px 6px; background:#181825; color:#cdd6f4; border:1px solid #45475a; border-radius:3px; font-family:Consolas,monospace; font-size:12px;">
+                    </div></div>`;
             } else if (prop.type === 'textarea') {
                 html += `<div class="prop-row"><label>${prop.label}</label>
                     <textarea data-prop="${prop.key}">${escapeHtml(node.properties[prop.key] || prop.default || '')}</textarea>
@@ -1583,6 +1711,63 @@
             });
         }
 
+        // --- Image Show: trackbar editor events ---
+        if (node.type === 'image_show') {
+            const list = el.querySelector('#tb-list');
+            const addBtn = el.querySelector('[data-tb-add]');
+
+            if (addBtn) {
+                addBtn.addEventListener('click', () => {
+                    pushUndo();
+                    node.properties.trackbars.push({
+                        name: 'Slider ' + (node.properties.trackbars.length + 1),
+                        nodeId: '',
+                        propKey: '',
+                        min: 0,
+                        max: 100,
+                        step: 1,
+                    });
+                    renderProperties(node);
+                });
+            }
+            if (list) {
+                list.querySelectorAll('.tb-row').forEach(row => {
+                    const idx = parseInt(row.dataset.tbIdx);
+                    const tb = node.properties.trackbars[idx];
+                    if (!tb) return;
+
+                    const delBtn = row.querySelector('[data-tb-del]');
+                    if (delBtn) {
+                        delBtn.addEventListener('click', () => {
+                            pushUndo();
+                            node.properties.trackbars.splice(idx, 1);
+                            renderProperties(node);
+                        });
+                    }
+                    row.querySelectorAll('[data-tb-field]').forEach(input => {
+                        const field = input.dataset.tbField;
+                        let undoPushed = false;
+                        input.addEventListener('focus', () => { undoPushed = false; });
+                        input.addEventListener('input', () => {
+                            if (!undoPushed) { pushUndo(); undoPushed = true; }
+                            if (input.type === 'number') tb[field] = parseFloat(input.value);
+                            else tb[field] = input.value;
+                            // Re-render if the target node changed so the property dropdown updates
+                            if (field === 'nodeId') {
+                                tb.propKey = ''; // reset property when target node changes
+                                renderProperties(node);
+                            }
+                        });
+                        input.addEventListener('change', () => {
+                            if (!undoPushed) { pushUndo(); undoPushed = true; }
+                            if (input.type === 'number') tb[field] = parseFloat(input.value);
+                            else tb[field] = input.value;
+                        });
+                    });
+                });
+            }
+        }
+
         // Bind events
         el.querySelectorAll('[data-prop]').forEach(input => {
             const propKey = input.dataset.prop;
@@ -1624,6 +1809,27 @@
             };
             input.addEventListener('input', handler);
             input.addEventListener('change', handler);
+        });
+
+        // Color picker ↔ hex text input two-way sync
+        el.querySelectorAll('input[type="color"][data-prop]').forEach(picker => {
+            const key = picker.dataset.prop;
+            const txt = el.querySelector(`[data-color-text="${key}"]`);
+            if (!txt) return;
+            picker.addEventListener('input', () => { txt.value = picker.value; });
+            const validHex = /^#[0-9a-fA-F]{6}$/;
+            txt.addEventListener('input', () => {
+                const v = txt.value.trim();
+                if (validHex.test(v)) {
+                    picker.value = v;
+                    node.properties[key] = v;
+                    if (state.selectedNode && state.selectedNode.id === node.id) {
+                        scheduleAutoPreview(node);
+                    } else {
+                        draw();
+                    }
+                }
+            });
         });
 
     }
@@ -2075,7 +2281,11 @@
         if (!result?.preview) return;
         const node = state.nodes.find(n => n.id === nodeId);
         const title = node ? (NODE_DEFS[node.type]?.label || node.type) + (node.label ? ': ' + node.label : '') : 'Image';
-        openImageWindow(result.preview, title, result.shape);
+        if (node && node.type === 'image_show') {
+            openImageShowWindow(node, result.preview, title, result.shape);
+        } else {
+            openImageWindow(result.preview, title, result.shape);
+        }
     };
 
     function openImageWindow(src, title, shape) {
@@ -2099,6 +2309,132 @@
 
         overlay.appendChild(titleEl);
         overlay.appendChild(img);
+        overlay.appendChild(hint);
+        document.body.appendChild(overlay);
+
+        const closeOnEsc = (e) => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', closeOnEsc); } };
+        document.addEventListener('keydown', closeOnEsc);
+    }
+
+    // ===== Image Show popup with trackbars (B from design) =====
+    // Per-ImageShow-node debounce + abort state, so concurrent slider drags don't pile up requests.
+    const _imageShowRefreshState = new Map();
+
+    function _scheduleImageShowRefresh(showNode, imgEl, shapeBadge) {
+        let s = _imageShowRefreshState.get(showNode.id);
+        if (!s) { s = { timer: null, abort: null }; _imageShowRefreshState.set(showNode.id, s); }
+        if (s.timer) clearTimeout(s.timer);
+        s.timer = setTimeout(async () => {
+            s.timer = null;
+            if (s.abort) s.abort.abort();
+            s.abort = new AbortController();
+            const payload = buildPayload();
+            payload.targetNodeId = showNode.id;
+            try {
+                const resp = await sessionFetch('/api/execute_single', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: s.abort.signal,
+                });
+                const data = await resp.json();
+                state.nodeResults[showNode.id] = data;
+                if (data.preview && imgEl) imgEl.src = data.preview;
+                if (shapeBadge && data.shape) {
+                    shapeBadge.textContent = ` (${data.shape[1]}x${data.shape[0]})`;
+                }
+                draw();
+            } catch (err) {
+                if (err && err.name !== 'AbortError') {
+                    console.error('Trackbar refresh failed:', err);
+                    setStatus('Trackbar 갱신 실패: ' + err.message, 'error');
+                }
+            }
+        }, 80);
+    }
+
+    function openImageShowWindow(node, src, title, shape) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:10000;display:flex;align-items:center;justify-content:center;flex-direction:column;cursor:pointer;';
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+        const titleWrap = document.createElement('div');
+        titleWrap.style.cssText = 'color:#cdd6f4;font-size:14px;margin-bottom:10px;font-family:"Segoe UI",sans-serif;';
+        const titleText = document.createElement('span');
+        titleText.textContent = title;
+        const shapeBadge = document.createElement('span');
+        shapeBadge.textContent = shape ? ` (${shape[1]}x${shape[0]})` : '';
+        shapeBadge.style.color = '#6c7086';
+        titleWrap.appendChild(titleText);
+        titleWrap.appendChild(shapeBadge);
+
+        const img = document.createElement('img');
+        img.src = src;
+        img.style.cssText = 'max-width:90vw;max-height:70vh;border:2px solid #45475a;border-radius:6px;display:block;';
+        img.onclick = (e) => e.stopPropagation();
+
+        // Trackbar panel (only if at least one valid trackbar is defined)
+        const trackbars = Array.isArray(node?.properties?.trackbars) ? node.properties.trackbars : [];
+        const validTbs = trackbars.filter(tb => tb.nodeId && tb.propKey);
+        let tbPanel = null;
+        if (validTbs.length) {
+            tbPanel = document.createElement('div');
+            tbPanel.onclick = (e) => e.stopPropagation();
+            tbPanel.style.cssText = 'margin-top:12px; padding:10px 14px; background:#1e1e2e; border:1px solid #45475a; border-radius:6px; min-width:min(680px, 90vw); max-width:90vw; max-height:25vh; overflow-y:auto; cursor:default;';
+
+            for (const tb of validTbs) {
+                const tgtNode = state.nodes.find(n => n.id === tb.nodeId);
+                if (!tgtNode) continue;
+
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:4px 0;';
+
+                const lblText = tb.name || `${_nodeDisplayName(tgtNode)}.${tb.propKey}`;
+                const lbl = document.createElement('div');
+                lbl.textContent = lblText;
+                lbl.title = lblText;
+                lbl.style.cssText = 'color:#cdd6f4; font-size:12px; min-width:160px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:"Segoe UI",sans-serif;';
+
+                const slider = document.createElement('input');
+                slider.type = 'range';
+                slider.min = String(tb.min != null ? tb.min : 0);
+                slider.max = String(tb.max != null ? tb.max : 100);
+                slider.step = String(tb.step != null ? tb.step : 1);
+                const curRaw = tgtNode.properties[tb.propKey];
+                const cur = (typeof curRaw === 'number' && !isNaN(curRaw)) ? curRaw : Number(tb.min != null ? tb.min : 0);
+                slider.value = String(cur);
+                slider.style.cssText = 'flex:1; min-width:200px;';
+
+                const valEl = document.createElement('div');
+                valEl.textContent = slider.value;
+                valEl.style.cssText = 'color:#a6e3a1; font-size:12px; min-width:64px; text-align:right; font-family:Consolas, monospace;';
+
+                row.appendChild(lbl);
+                row.appendChild(slider);
+                row.appendChild(valEl);
+                tbPanel.appendChild(row);
+
+                slider.addEventListener('input', () => {
+                    const v = parseFloat(slider.value);
+                    valEl.textContent = slider.value;
+                    tgtNode.properties[tb.propKey] = v;
+                    // Mirror to properties panel if the target node is currently selected
+                    if (state.selectedNode && state.selectedNode.id === tgtNode.id) {
+                        const inp = document.querySelector(`#prop-content [data-prop="${tb.propKey}"]`);
+                        if (inp && inp !== document.activeElement) inp.value = slider.value;
+                    }
+                    _scheduleImageShowRefresh(node, img, shapeBadge);
+                });
+            }
+        }
+
+        const hint = document.createElement('div');
+        hint.textContent = (validTbs.length ? '슬라이더를 드래그하면 결과가 실시간 갱신됩니다 | ' : '') + 'Click outside to close | ESC to close';
+        hint.style.cssText = 'color:#6c7086;font-size:11px;margin-top:8px;font-family:"Segoe UI",sans-serif;';
+
+        overlay.appendChild(titleWrap);
+        overlay.appendChild(img);
+        if (tbPanel) overlay.appendChild(tbPanel);
         overlay.appendChild(hint);
         document.body.appendChild(overlay);
 
@@ -2142,6 +2478,22 @@
 
     function escapeAttr(str) {
         return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ===== Trackbar helpers (Image Show node) =====
+    function _nodeDisplayName(n) {
+        const def = NODE_DEFS[n.type];
+        const lbl = n.label || (def ? def.label : n.type);
+        return `${lbl} (${n.id})`;
+    }
+
+    function _getNumericPropsForNode(nodeId) {
+        if (!nodeId) return [];
+        const n = state.nodes.find(x => x.id === nodeId);
+        if (!n) return [];
+        const def = NODE_DEFS[n.type];
+        if (!def || !def.properties) return [];
+        return def.properties.filter(p => p.type === 'number' || p.type === 'range');
     }
 
     // ===== Build payload for backend =====
@@ -2194,12 +2546,14 @@
                 renderPreview(state.selectedNode);
             }
 
-            // Auto-open Image Show popup for image_show nodes
-            for (const node of state.nodes) {
-                if (node.type === 'image_show' && data[node.id]?.preview) {
-                    const title = 'Image Show' + (node.label ? ': ' + node.label : '') +
-                        (node.properties.windowName ? ' [' + node.properties.windowName + ']' : '');
-                    openImageWindow(data[node.id].preview, title, data[node.id].shape);
+            // Auto-open Image Show popup for image_show nodes (suppressed during auto-execute after load)
+            if (!_suppressImageShowPopup) {
+                for (const node of state.nodes) {
+                    if (node.type === 'image_show' && data[node.id]?.preview) {
+                        const title = 'Image Show' + (node.label ? ': ' + node.label : '') +
+                            (node.properties.windowName ? ' [' + node.properties.windowName + ']' : '');
+                        openImageShowWindow(node, data[node.id].preview, title, data[node.id].shape);
+                    }
                 }
             }
 
@@ -2623,6 +2977,22 @@
 
             const imgCount = Object.keys(imagePreviews).length;
             setStatus(`Project loaded: ${file.name} (${imgCount} image${imgCount !== 1 ? 's' : ''} restored)`, 'success');
+
+            // If at least one image was restored, run the full pipeline so every
+            // downstream node also shows its preview. Skip if a video_read is in loop mode
+            // (auto-starting an infinite loop on load would be surprising).
+            if (imgCount > 0 && state.nodes.length > 0) {
+                const hasLoopVideo = state.nodes.some(n =>
+                    n.type === 'video_read' && n.properties && n.properties.mode === 'loop');
+                if (!hasLoopVideo) {
+                    _suppressImageShowPopup = true;
+                    try {
+                        await executePipeline();
+                    } finally {
+                        _suppressImageShowPopup = false;
+                    }
+                }
+            }
         } catch (err) {
             setStatus('Load project failed: ' + err.message, 'error');
         }
@@ -2634,6 +3004,14 @@
         if (state.nodes.length === 0) return;
         if (!confirm('Clear all nodes and connections?')) return;
         pushUndo();
+        // Cancel any in-flight trackbar refreshes and pending timers
+        _imageShowRefreshState.forEach(s => {
+            if (s.timer) clearTimeout(s.timer);
+            if (s.abort) { try { s.abort.abort(); } catch (e) {} }
+        });
+        _imageShowRefreshState.clear();
+        // Close any open Image Show / Image popup overlays (those are created with z-index:10000)
+        document.querySelectorAll('body > div[style*="z-index:10000"]').forEach(el => el.remove());
         state.nodes = [];
         state.connections = [];
         state.selectedNode = null;
@@ -2927,9 +3305,10 @@
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const n of state.nodes) {
             const h = getNodeHeight(n);
+            const w = getNodeWidth(n);
             if (n.x < minX) minX = n.x;
             if (n.y < minY) minY = n.y;
-            if (n.x + NODE_WIDTH > maxX) maxX = n.x + NODE_WIDTH;
+            if (n.x + w > maxX) maxX = n.x + w;
             if (n.y + h > maxY) maxY = n.y + h;
         }
         const pad = 30;

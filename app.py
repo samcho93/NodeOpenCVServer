@@ -2329,7 +2329,13 @@ def process_image_extract(node, inputs):
 
 
 # Node processor mapping
+def process_text_label(node, inputs):
+    """Annotation-only node. No output, no error — purely a canvas decoration."""
+    return {}
+
+
 NODE_PROCESSORS = {
+    'text_label': process_text_label,
     'image_read': process_image_read,
     'image_show': process_image_show,
     'cvt_color': process_cvt_color,
