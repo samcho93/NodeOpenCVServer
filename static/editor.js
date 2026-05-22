@@ -1432,8 +1432,14 @@
         // --- Warp Perspective: point tables with picker ---
         if (node.type === 'warp_perspective') {
             _skipProps.add('srcPoints'); _skipProps.add('dstPoints');
-            const srcStr = node.properties.srcPoints || '0,0;300,0;300,300;0,300';
-            const dstStr = node.properties.dstPoints || '0,0;300,0;300,300;0,300';
+            // When points aren't set yet, default to the FULL input-image corners
+            // (so an unedited dst maps to the whole frame, not a fixed 300px box).
+            const psize = _getPerspectiveInputSize(node);
+            const cornerDefault = psize
+                ? `0,0;${psize.w},0;${psize.w},${psize.h};0,${psize.h}`
+                : '0,0;300,0;300,300;0,300';
+            const srcStr = node.properties.srcPoints || cornerDefault;
+            const dstStr = node.properties.dstPoints || cornerDefault;
             const srcPts = srcStr.split(';').map(p => p.split(',').map(Number));
             const dstPts = dstStr.split(';').map(p => p.split(',').map(Number));
             const labels = ['TL', 'TR', 'BR', 'BL'];
@@ -1942,6 +1948,20 @@
 
     // ===== Perspective Point Helpers =====
 
+    // Find the input image size for a warp_perspective node: prefer its own result,
+    // else the shape of an upstream connected node's result. Returns {w,h} or null.
+    function _getPerspectiveInputSize(node) {
+        const r = state.nodeResults[node.id];
+        if (r && r.shape && r.shape.length >= 2) return { w: r.shape[1], h: r.shape[0] };
+        for (const conn of state.connections) {
+            if (conn.targetNode === node.id) {
+                const sr = state.nodeResults[conn.sourceNode];
+                if (sr && sr.shape && sr.shape.length >= 2) return { w: sr.shape[1], h: sr.shape[0] };
+            }
+        }
+        return null;
+    }
+
     function _syncPerspectivePoints(el, node) {
         // Rebuild srcPoints/dstPoints strings from grid inputs
         for (const role of ['src', 'dst']) {
@@ -1960,160 +1980,172 @@
     // Interactive point picker on preview image
     let _pointPickerState = null;
 
-    function _startPointPicker(node, role) {
-        // Find the preview image in the preview panel
-        const previewEl = document.getElementById('preview-content');
-        const previewImg = previewEl ? previewEl.querySelector('img') : null;
-        if (!previewImg || !previewImg.src) {
-            setStatus('Run Preview first to pick points on the image', 'error');
-            return;
-        }
-
-        // Get actual image dimensions from node result
-        const result = state.nodeResults[node.id];
-        // Look for upstream image_read node result for real dimensions
-        let imgW = 300, imgH = 300;
-        if (result && result.shape) {
-            imgW = result.shape[1]; imgH = result.shape[0];
-        } else {
-            // Try to find dimensions from an upstream node
-            for (const conn of state.connections) {
-                if (conn.targetNode === node.id) {
-                    const srcResult = state.nodeResults[conn.sourceNode];
-                    if (srcResult && srcResult.shape) {
-                        imgW = srcResult.shape[1]; imgH = srcResult.shape[0];
-                        break;
-                    }
+    // Find the INPUT image (preview + size) feeding a warp_perspective node.
+    // Perspective points must be picked on the source image, never on the warped output.
+    function _getPerspectiveInputPreview(node) {
+        for (const conn of state.connections) {
+            if (conn.targetNode === node.id) {
+                const sr = state.nodeResults[conn.sourceNode];
+                if (sr && sr.preview && sr.shape && sr.shape.length >= 2) {
+                    return { preview: sr.preview, w: sr.shape[1], h: sr.shape[0] };
                 }
             }
         }
+        return null;
+    }
 
-        // Create overlay canvas on top of preview image
+    function _startPointPicker(node, role) {
+        // Always pick on the INPUT image (upstream result), not on this node's warped output.
+        const input = _getPerspectiveInputPreview(node);
+        if (!input) {
+            setStatus('입력 이미지를 먼저 실행(Execute)하세요 — 원본 이미지 위에서 점을 찍습니다.', 'error');
+            return;
+        }
+        const imgW = input.w, imgH = input.h;
+        const color = role === 'src' ? '#89b4fa' : '#f38ba8';
+        const labels = ['TL', 'TR', 'BR', 'BL'];
+        const roleName = role === 'src' ? 'Source(원본 사각형)' : 'Dest(목표 위치)';
+
+        // Full-screen modal overlay
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:11000;display:flex;align-items:center;justify-content:center;flex-direction:column;';
+
+        const titleEl = document.createElement('div');
+        titleEl.style.cssText = 'color:#cdd6f4;font-size:14px;margin-bottom:8px;font-family:"Segoe UI",sans-serif;text-align:center;';
+        titleEl.innerHTML = `<b>${roleName}</b> 점 4개를 순서대로 클릭: ${labels.join(' → ')} &nbsp;|&nbsp; 입력 이미지 ${imgW}×${imgH}`;
+
         const wrap = document.createElement('div');
-        wrap.className = 'preview-canvas-wrap';
-        wrap.style.position = 'relative';
-        wrap.style.display = 'inline-block';
+        wrap.style.cssText = 'position:relative;display:inline-block;line-height:0;border:2px solid #45475a;border-radius:6px;overflow:hidden;';
+
+        const img = document.createElement('img');
+        img.src = input.preview;
+        img.style.cssText = 'display:block;max-width:88vw;max-height:78vh;';
 
         const cvs = document.createElement('canvas');
-        cvs.className = 'preview-point-canvas picking';
-        cvs.width = previewImg.clientWidth;
-        cvs.height = previewImg.clientHeight;
-        cvs.style.position = 'absolute';
-        cvs.style.top = '0';
-        cvs.style.left = '0';
-        cvs.style.cursor = 'crosshair';
-        cvs.style.zIndex = '10';
+        cvs.style.cssText = 'position:absolute;top:0;left:0;cursor:crosshair;';
 
-        // Wrap the image
-        previewImg.parentNode.insertBefore(wrap, previewImg);
-        wrap.appendChild(previewImg);
+        const hint = document.createElement('div');
+        hint.style.cssText = 'color:#6c7086;font-size:12px;margin-top:8px;font-family:"Segoe UI",sans-serif;';
+        hint.textContent = 'ESC 취소 | 마지막(BL) 점을 찍으면 자동 적용';
+
+        wrap.appendChild(img);
         wrap.appendChild(cvs);
+        overlay.appendChild(titleEl);
+        overlay.appendChild(wrap);
+        overlay.appendChild(hint);
+        document.body.appendChild(overlay);
 
         const pickerCtx = cvs.getContext('2d');
         const points = [];
-        const color = role === 'src' ? '#89b4fa' : '#f38ba8';
-        const labels = ['TL', 'TR', 'BR', 'BL'];
 
-        _pointPickerState = { node, role, cvs, wrap, points, imgW, imgH };
+        // Prefill with existing points for this role (shown as faded guide, click still replaces)
+        const existingStr = node.properties[role + 'Points'];
 
-        setStatus(`Click 4 points on the image (${role === 'src' ? 'Source' : 'Dest'}: ${labels.join(' → ')})`, '');
+        function layout() {
+            // Match canvas to the displayed image size
+            const dw = img.clientWidth, dh = img.clientHeight;
+            cvs.width = dw; cvs.height = dh;
+            draw();
+        }
 
-        // Draw existing points and guide
-        function drawPoints() {
+        function toDisp(x, y) {
+            return { x: (x / imgW) * cvs.width, y: (y / imgH) * cvs.height };
+        }
+
+        function draw() {
             pickerCtx.clearRect(0, 0, cvs.width, cvs.height);
-            // Draw lines between placed points
+            // Existing points (faded) for reference
+            if (existingStr && points.length === 0) {
+                const ex = existingStr.split(';').map(p => p.split(',').map(Number));
+                if (ex.length === 4) {
+                    pickerCtx.strokeStyle = 'rgba(200,200,200,0.5)';
+                    pickerCtx.lineWidth = 1.5;
+                    pickerCtx.setLineDash([3, 3]);
+                    pickerCtx.beginPath();
+                    ex.forEach((p, i) => {
+                        const d = toDisp(p[0], p[1]);
+                        if (i === 0) pickerCtx.moveTo(d.x, d.y); else pickerCtx.lineTo(d.x, d.y);
+                    });
+                    pickerCtx.closePath();
+                    pickerCtx.stroke();
+                    pickerCtx.setLineDash([]);
+                }
+            }
             if (points.length > 1) {
                 pickerCtx.strokeStyle = color;
                 pickerCtx.lineWidth = 2;
                 pickerCtx.setLineDash([4, 4]);
                 pickerCtx.beginPath();
                 pickerCtx.moveTo(points[0].px, points[0].py);
-                for (let i = 1; i < points.length; i++) {
-                    pickerCtx.lineTo(points[i].px, points[i].py);
-                }
+                for (let i = 1; i < points.length; i++) pickerCtx.lineTo(points[i].px, points[i].py);
                 if (points.length === 4) pickerCtx.lineTo(points[0].px, points[0].py);
                 pickerCtx.stroke();
                 pickerCtx.setLineDash([]);
             }
-            // Draw point circles
             for (let i = 0; i < points.length; i++) {
                 pickerCtx.fillStyle = color;
                 pickerCtx.beginPath();
-                pickerCtx.arc(points[i].px, points[i].py, 6, 0, Math.PI * 2);
+                pickerCtx.arc(points[i].px, points[i].py, 7, 0, Math.PI * 2);
                 pickerCtx.fill();
                 pickerCtx.fillStyle = '#fff';
-                pickerCtx.font = 'bold 9px sans-serif';
+                pickerCtx.font = 'bold 10px sans-serif';
                 pickerCtx.textAlign = 'center';
                 pickerCtx.textBaseline = 'middle';
                 pickerCtx.fillText(labels[i], points[i].px, points[i].py);
             }
-            // Show remaining count
-            if (points.length < 4) {
-                pickerCtx.fillStyle = 'rgba(0,0,0,0.6)';
-                pickerCtx.fillRect(0, cvs.height - 20, cvs.width, 20);
-                pickerCtx.fillStyle = '#fff';
-                pickerCtx.font = '11px sans-serif';
-                pickerCtx.textAlign = 'center';
-                pickerCtx.fillText(`Click ${labels[points.length]} (${4 - points.length} remaining)`, cvs.width / 2, cvs.height - 7);
-            }
         }
 
-        drawPoints();
+        const onResize = () => layout();
+
+        function cleanup() {
+            document.removeEventListener('keydown', onEsc);
+            window.removeEventListener('resize', onResize);
+            if (overlay.parentNode) overlay.remove();
+            _pointPickerState = null;
+        }
+
+        function onEsc(e) {
+            if (e.key === 'Escape') { cleanup(); setStatus('Point picking cancelled', ''); }
+        }
+
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) { cleanup(); setStatus('Point picking cancelled', ''); } });
+        document.addEventListener('keydown', onEsc);
+        window.addEventListener('resize', onResize);
 
         cvs.addEventListener('click', function onPickClick(e) {
             const rect = cvs.getBoundingClientRect();
             const px = e.clientX - rect.left;
             const py = e.clientY - rect.top;
-            // Convert preview coords to actual image coords
-            const scaleX = imgW / cvs.width;
-            const scaleY = imgH / cvs.height;
-            const realX = Math.round(px * scaleX);
-            const realY = Math.round(py * scaleY);
+            const realX = Math.round((px / cvs.width) * imgW);
+            const realY = Math.round((py / cvs.height) * imgH);
             points.push({ px, py, x: realX, y: realY });
-            drawPoints();
+            draw();
 
             if (points.length === 4) {
-                // Done picking — update node properties
                 cvs.removeEventListener('click', onPickClick);
                 pushUndo();
                 const ptsStr = points.map(p => `${p.x},${p.y}`).join(';');
                 node.properties[role + 'Points'] = ptsStr;
-                // Update the property panel inputs
                 const propEl = document.getElementById('prop-content');
-                for (let i = 0; i < 4; i++) {
-                    const xInp = propEl.querySelector(`[data-perspect="${role}X${i}"]`);
-                    const yInp = propEl.querySelector(`[data-perspect="${role}Y${i}"]`);
-                    if (xInp) xInp.value = points[i].x;
-                    if (yInp) yInp.value = points[i].y;
-                }
-                setStatus(`${role === 'src' ? 'Source' : 'Dest'} points set: ${ptsStr}`, 'success');
-                // Clean up overlay after a short delay
-                setTimeout(() => {
-                    if (wrap.parentNode) {
-                        wrap.parentNode.insertBefore(previewImg, wrap);
-                        wrap.remove();
+                if (propEl) {
+                    for (let i = 0; i < 4; i++) {
+                        const xInp = propEl.querySelector(`[data-perspect="${role}X${i}"]`);
+                        const yInp = propEl.querySelector(`[data-perspect="${role}Y${i}"]`);
+                        if (xInp) xInp.value = points[i].x;
+                        if (yInp) yInp.value = points[i].y;
                     }
-                    _pointPickerState = null;
-                    scheduleAutoPreview(node);
-                }, 500);
+                }
+                setStatus(`${roleName} 점 설정됨: ${ptsStr}`, 'success');
+                setTimeout(() => { cleanup(); scheduleAutoPreview(node); }, 350);
             } else {
-                setStatus(`Point ${points.length}/4 set (${labels[points.length - 1]}: ${realX},${realY}). Click ${labels[points.length]} next.`, '');
+                setStatus(`${points.length}/4 (${labels[points.length - 1]}: ${realX},${realY}) — 다음: ${labels[points.length]}`, '');
             }
         });
 
-        // ESC to cancel
-        function onEsc(e) {
-            if (e.key === 'Escape') {
-                document.removeEventListener('keydown', onEsc);
-                if (wrap.parentNode) {
-                    wrap.parentNode.insertBefore(previewImg, wrap);
-                    wrap.remove();
-                }
-                _pointPickerState = null;
-                setStatus('Point picking cancelled', '');
-            }
-        }
-        document.addEventListener('keydown', onEsc);
+        _pointPickerState = { node, role, overlay, points, imgW, imgH };
+
+        if (img.complete && img.clientWidth) layout();
+        else img.addEventListener('load', layout);
     }
 
     // ===== File Upload =====

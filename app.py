@@ -1779,7 +1779,14 @@ def process_warp_perspective(node, inputs):
     src_pts = _parse_perspective_points(props.get('srcPoints', ''), w, h)
     dst_pts = _parse_perspective_points(props.get('dstPoints', ''), w, h)
     M = cv2.getPerspectiveTransform(src_pts, dst_pts)
-    result = cv2.warpPerspective(img, M, (w, h))
+    # Output canvas is sized to the destination points' bounding box so the warped
+    # region fills the frame instead of being crammed into the top-left with black
+    # margins (e.g. de-skewing a document to a 258x255 quad => 258x255 output).
+    out_w = int(round(float(dst_pts[:, 0].max())))
+    out_h = int(round(float(dst_pts[:, 1].max())))
+    if out_w < 1 or out_h < 1:
+        out_w, out_h = w, h
+    result = cv2.warpPerspective(img, M, (out_w, out_h))
     return {'image': result}
 
 
@@ -4036,16 +4043,25 @@ def generate_python_code(nodes, connections):
             lines.append('')
 
         elif ntype == 'warp_perspective':
-            src_str = props.get('srcPoints', '0,0;300,0;300,300;0,300')
-            dst_str = props.get('dstPoints', '0,0;300,0;300,300;0,300')
-            src_pts = [[float(x) for x in p.split(',')] for p in src_str.split(';')]
-            dst_pts = [[float(x) for x in p.split(',')] for p in dst_str.split(';')]
+            src_str = props.get('srcPoints', '')
+            dst_str = props.get('dstPoints', '')
             lines.append(f'# Warp Perspective')
             lines.append(f'_h, _w = {src}.shape[:2]')
-            lines.append(f'_src_pts = np.float32({src_pts})')
-            lines.append(f'_dst_pts = np.float32({dst_pts})')
+            if src_str:
+                src_pts = [[float(x) for x in p.split(',')] for p in src_str.split(';')]
+                lines.append(f'_src_pts = np.float32({src_pts})')
+            else:
+                lines.append('_src_pts = np.float32([[0, 0], [_w, 0], [_w, _h], [0, _h]])')
+            if dst_str:
+                dst_pts = [[float(x) for x in p.split(',')] for p in dst_str.split(';')]
+                lines.append(f'_dst_pts = np.float32({dst_pts})')
+            else:
+                lines.append('_dst_pts = np.float32([[0, 0], [_w, 0], [_w, _h], [0, _h]])')
             lines.append(f'_M = cv2.getPerspectiveTransform(_src_pts, _dst_pts)')
-            lines.append(f'{out} = cv2.warpPerspective({src}, _M, (_w, _h))')
+            # Output sized to the destination bounding box (fills frame, no black margins)
+            lines.append('_ow = max(1, int(round(float(_dst_pts[:, 0].max()))))')
+            lines.append('_oh = max(1, int(round(float(_dst_pts[:, 1].max()))))')
+            lines.append(f'{out} = cv2.warpPerspective({src}, _M, (_ow, _oh))')
             lines.append('')
 
         elif ntype == 'remap':

@@ -1230,10 +1230,12 @@ img_output = img_input.copy()
         inputs: [{ id: 'image', label: 'image' }],
         outputs: [{ id: 'image', label: 'image' }],
         properties: [
+            // Empty default => backend falls back to the full input-image corners.
+            // The properties panel fills the grid with the actual image corners on render.
             { key: 'srcPoints', label: 'Source Points', type: 'perspective_points', role: 'src',
-              default: '0,0;300,0;300,300;0,300' },
+              default: '' },
             { key: 'dstPoints', label: 'Dest Points', type: 'perspective_points', role: 'dst',
-              default: '0,0;300,0;300,300;0,300' }
+              default: '' }
         ],
         doc: { signature: 'cv2.getPerspectiveTransform + cv2.warpPerspective', description: 'Applies perspective transformation using 4 source and 4 destination corner points. Click "Pick" to interactively select points on the preview image.', params: [{ name: 'src points', desc: '4 source corner coordinates (top-left, top-right, bottom-right, bottom-left)' }, { name: 'dst points', desc: '4 destination corner coordinates' }], returns: 'numpy.ndarray - Perspective-transformed image' }
     },
