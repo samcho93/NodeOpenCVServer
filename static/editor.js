@@ -3503,8 +3503,37 @@
                 const blob = await resp.blob();
                 let filename = 'report.pdf';
                 const cd = resp.headers.get('Content-Disposition') || '';
-                const m = /filename="?([^";]+)"?/i.exec(cd);
-                if (m) filename = m[1];
+                // Prefer RFC 5987 filename*=UTF-8''<percent-encoded> (preserves Korean / Unicode)
+                const mStar = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(cd);
+                if (mStar) {
+                    try { filename = decodeURIComponent(mStar[1].trim()); } catch (_) { /* keep default */ }
+                } else {
+                    const m = /filename="?([^";]+)"?/i.exec(cd);
+                    if (m) filename = m[1];
+                }
+
+                // 1) Native File System (Chrome/Edge, secure context) — 클라이언트가 저장 위치 선택
+                if (window.showSaveFilePicker) {
+                    try {
+                        const handle = await window.showSaveFilePicker({
+                            suggestedName: filename,
+                            types: [{ description: 'PDF File', accept: { 'application/pdf': ['.pdf'] } }],
+                        });
+                        const writable = await handle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                        setStatus('보고서 저장됨 (로컬): ' + handle.name, 'success');
+                        return;
+                    } catch (err) {
+                        if (err.name === 'AbortError') {
+                            setStatus('보고서 저장 취소됨', '');
+                            return;
+                        }
+                        // showSaveFilePicker 실패 시 다운로드로 폴백
+                    }
+                }
+
+                // 2) Fallback — 브라우저 기본 다운로드 폴더
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -3513,7 +3542,7 @@
                 a.click();
                 a.remove();
                 URL.revokeObjectURL(url);
-                setStatus('보고서 다운로드: ' + filename, 'success');
+                setStatus('보고서 다운로드(기본 폴더): ' + filename, 'success');
             } catch (err) {
                 setStatus('보고서 생성 오류: ' + err.message, 'error');
             } finally {

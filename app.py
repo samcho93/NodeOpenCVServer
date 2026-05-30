@@ -4,6 +4,7 @@ Flask backend for image processing pipeline execution
 Multi-user session support for classroom environments
 """
 import os
+import re
 import uuid
 import base64
 import traceback
@@ -13,6 +14,7 @@ import threading
 import shutil
 import zipfile
 import io
+from urllib.parse import quote
 import cv2
 import numpy as np
 from flask import Flask, request, jsonify, send_from_directory, render_template, Response, stream_with_context, g, make_response
@@ -4521,11 +4523,22 @@ def api_report():
         traceback.print_exc()
         return jsonify({'error': f'Report build failed: {e}'}), 500
 
-    safe_name = (meta['name'] or 'report').replace(' ', '_')
-    filename = f"report_{safe_name}_{time.strftime('%Y%m%d_%H%M%S')}.pdf"
+    # Build filename. The user-entered name may contain non-ASCII (e.g. Korean),
+    # but HTTP headers are latin-1 only — use RFC 5987 so modern browsers see the
+    # full Unicode name and legacy clients fall back to an ASCII-safe variant.
+    ts = time.strftime('%Y%m%d_%H%M%S')
+    raw_name = (meta['name'] or 'report').strip().replace(' ', '_')
+    display_name = f"report_{raw_name}_{ts}.pdf"
+    ascii_name = re.sub(r'[^A-Za-z0-9._-]', '_', raw_name) or 'report'
+    ascii_fallback = f"report_{ascii_name}_{ts}.pdf"
+    encoded = quote(display_name, safe='')
+
     resp = make_response(buf.getvalue())
     resp.headers['Content-Type'] = 'application/pdf'
-    resp.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    resp.headers['Content-Disposition'] = (
+        f'attachment; filename="{ascii_fallback}"; '
+        f"filename*=UTF-8''{encoded}"
+    )
     return resp
 
 
